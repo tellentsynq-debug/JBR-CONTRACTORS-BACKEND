@@ -119,15 +119,27 @@ exports.activateCampaign = async (req, res) => {
     const { id } = req.params;
     const connection = await pool.getConnection();
     
+    // Check current status
+    const [rows] = await connection.query('SELECT status FROM campaigns WHERE id = ?', [id]);
+    
+    if (rows.length === 0) {
+      connection.release();
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    if (rows[0].status === 'active') {
+      connection.release();
+      return res.status(400).json({ 
+        error: 'Campaign is already active',
+        status: 'active'
+      });
+    }
+
     const [result] = await connection.query(
       'UPDATE campaigns SET status = ? WHERE id = ?',
       ['active', id]
     );
     connection.release();
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Campaign not found' });
-    }
 
     res.json({
       id,
@@ -146,15 +158,27 @@ exports.deactivateCampaign = async (req, res) => {
     const { id } = req.params;
     const connection = await pool.getConnection();
     
+    // Check current status
+    const [rows] = await connection.query('SELECT status FROM campaigns WHERE id = ?', [id]);
+    
+    if (rows.length === 0) {
+      connection.release();
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    if (rows[0].status === 'inactive') {
+      connection.release();
+      return res.status(400).json({ 
+        error: 'Campaign is already inactive',
+        status: 'inactive'
+      });
+    }
+
     const [result] = await connection.query(
       'UPDATE campaigns SET status = ? WHERE id = ?',
       ['inactive', id]
     );
     connection.release();
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Campaign not found' });
-    }
 
     res.json({
       id,
