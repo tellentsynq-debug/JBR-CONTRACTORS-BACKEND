@@ -1,4 +1,59 @@
 const pool = require('../config/database');
+const bcrypt = require('bcryptjs');
+
+// Signup user
+exports.signup = async (req, res) => {
+  try {
+    const { firstName, lastName, email, password } = req.body;
+
+    // Validation
+    if (!firstName || !lastName || !email || !password) {
+      return res.status(400).json({ 
+        error: 'First name, last name, email, and password are required' 
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ 
+        error: 'Password must be at least 6 characters long' 
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const connection = await pool.getConnection();
+    
+    // Check if email already exists
+    const [existingUser] = await connection.query(
+      'SELECT email FROM users WHERE email = ?',
+      [email]
+    );
+
+    if (existingUser.length > 0) {
+      connection.release();
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+
+    // Insert new user
+    const [result] = await connection.query(
+      'INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)',
+      [firstName, lastName, email, hashedPassword]
+    );
+    connection.release();
+
+    res.status(201).json({ 
+      id: result.insertId, 
+      firstName, 
+      lastName, 
+      email,
+      message: 'User registered successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
 
 // Get all users
 exports.getAllUsers = async (req, res) => {
