@@ -17,7 +17,9 @@ app.get('/', (req, res) => {
 
 // Import routes
 const userRoutes = require('./routes/users');
+const campaignRoutes = require('./routes/campaigns');
 app.use('/api/users', userRoutes);
+app.use('/api/campaigns', campaignRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
