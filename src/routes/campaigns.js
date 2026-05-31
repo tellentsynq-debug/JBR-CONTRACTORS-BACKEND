@@ -10,5 +10,7 @@ router.get('/', authMiddleware.verifyToken, campaignController.getAllCampaigns);
 router.get('/:id', authMiddleware.verifyToken, campaignController.getCampaignById);
 router.put('/:id', authMiddleware.verifyToken, campaignController.updateCampaign);
 router.delete('/:id', authMiddleware.verifyToken, campaignController.deleteCampaign);
+router.patch('/:id/activate', authMiddleware.verifyToken, campaignController.activateCampaign);
+router.patch('/:id/deactivate', authMiddleware.verifyToken, campaignController.deactivateCampaign);
 
 module.exports = router;

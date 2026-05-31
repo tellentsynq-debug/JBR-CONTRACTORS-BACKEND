@@ -112,3 +112,57 @@ exports.deleteCampaign = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Activate campaign
+exports.activateCampaign = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const connection = await pool.getConnection();
+    
+    const [result] = await connection.query(
+      'UPDATE campaigns SET status = ? WHERE id = ?',
+      ['active', id]
+    );
+    connection.release();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    res.json({
+      id,
+      status: 'active',
+      message: 'Campaign activated successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Deactivate campaign
+exports.deactivateCampaign = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const connection = await pool.getConnection();
+    
+    const [result] = await connection.query(
+      'UPDATE campaigns SET status = ? WHERE id = ?',
+      ['inactive', id]
+    );
+    connection.release();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    res.json({
+      id,
+      status: 'inactive',
+      message: 'Campaign deactivated successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
