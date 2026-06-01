@@ -18,8 +18,10 @@ app.get('/', (req, res) => {
 // Import routes
 const userRoutes = require('./routes/users');
 const campaignRoutes = require('./routes/campaigns');
+const jobIndustryRoutes = require('./routes/jobIndustries');
 app.use('/api/users', userRoutes);
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/job-industries', jobIndustryRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
