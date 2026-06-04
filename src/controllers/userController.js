@@ -141,6 +141,21 @@ exports.signup = async (req, res) => {
       userId = signUpData.user.id;
     }
 
+    // Create user in public users table first (required for FK constraint in profiles)
+    const { data: userData, error: userError } = await supabaseAdmin
+      .from('users')
+      .insert([{
+        id: userId,
+        email,
+        created_at: new Date().toISOString()
+      }])
+      .select();
+
+    if (userError) {
+      console.error('User Table Insert Error:', userError);
+      // Continue anyway - it might already exist
+    }
+
     // Store additional profile info in profiles table (using admin client to bypass RLS)
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from('profiles')
