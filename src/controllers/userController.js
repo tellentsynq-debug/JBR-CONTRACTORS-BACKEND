@@ -255,6 +255,8 @@ exports.login = async (req, res) => {
       });
     }
 
+    console.log(`Login attempt for: ${email}`);
+
     // Sign in using Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -263,8 +265,18 @@ exports.login = async (req, res) => {
 
     if (authError) {
       console.error('Supabase Auth Error:', authError);
-      return res.status(401).json({ error: 'Invalid email or password' });
+      console.log('Auth error details:', {
+        message: authError.message,
+        code: authError.code,
+        status: authError.status
+      });
+      return res.status(401).json({ 
+        error: 'Invalid email or password',
+        details: authError.message 
+      });
     }
+
+    console.log(`✓ Auth successful for user: ${email}, ID: ${authData.user.id}`);
 
     // Get user profile
     const { data: user, error: profileError } = await supabase
@@ -275,6 +287,9 @@ exports.login = async (req, res) => {
 
     if (profileError) {
       console.error('Profile Query Error:', profileError);
+      console.log('Profile may not exist yet - continuing with basic user info');
+    } else {
+      console.log(`✓ Profile found for user: ${email}`);
     }
 
     // Generate JWT token
@@ -296,7 +311,10 @@ exports.login = async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: 'An unexpected error occurred during login',
+      details: error.message 
+    });
   }
 };
 
