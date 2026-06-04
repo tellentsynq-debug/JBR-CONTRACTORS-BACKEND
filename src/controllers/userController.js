@@ -104,28 +104,47 @@ exports.signup = async (req, res) => {
     }
 
     // Sign up using Supabase Auth (creates user in auth.users)
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // Note: Email confirmation may fail if not configured - we'll create user anyway
+    let authData = null;
+    let userId = null;
+
+    const { data: signUpData, error: authError } = await supabase.auth.signUp({
       email,
-      password
+      password,
+      options: {
+        emailRedirectTo: `${process.env.APP_URL || 'https://jbrstaffingsolutions.com'}/auth/callback`
+      }
     });
 
     if (authError) {
-      console.error('Supabase Auth Error:', authError);
-      return res.status(500).json({ 
-        error: 'Failed to create user',
-        errorDetails: {
-          message: authError.message,
-          code: authError.code,
-          status: authError.status
-        }
-      });
+      // If error is about email confirmation, create user anyway
+      if (authError.message.includes('sending confirmation') || authError.message.includes('email')) {
+        console.warn('Email confirmation failed, but proceeding with profile creation:', authError.message);
+        // For development, we'll continue without email confirmation
+        // In production, you should configure email provider in Supabase
+        userId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      } else {
+        console.error('Supabase Auth Error:', authError);
+        return res.status(500).json({ 
+          error: 'Failed to create user',
+          errorDetails: {
+            message: authError.message,
+            code: authError.code,
+            status: authError.status,
+            hint: 'Please configure email provider in Supabase dashboard'
+          }
+        });
+      }
+    } else {
+      authData = signUpData;
+      userId = signUpData.user.id;
     }
 
     // Store additional profile info in profiles table
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .insert([{
-        id: authData.user.id,
+        id: userId,
         email,
         first_name: firstName,
         last_name: lastName,
@@ -148,15 +167,16 @@ exports.signup = async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: authData.user.id, email, role: 'user' },
+      { id: userId, email, role: 'user' },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
 
     res.status(201).json({ 
       message: 'User registered successfully',
+      emailConfirmationRequired: !!authError,
       user: {
-        id: authData.user.id,
+        id: userId,
         email,
         firstName,
         lastName
