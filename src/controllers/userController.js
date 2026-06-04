@@ -205,6 +205,24 @@ exports.signup = async (req, res) => {
       console.log(`✓ Profile created successfully for user ID: ${userId}`);
     }
 
+    // Auto-confirm email so user can login immediately (only if auth failed/generated UUID)
+    if (userId && authError) {
+      console.log(`Auto-confirming email for user: ${email}`);
+      try {
+        // Use admin API to confirm the email
+        await supabaseAdmin.auth.admin.updateUserById(userId, {
+          email_confirm: true,
+          user_metadata: {
+            email_verified: true
+          }
+        });
+        console.log(`✓ Email auto-confirmed for user: ${email}`);
+      } catch (err) {
+        console.warn('Warning: Could not auto-confirm email:', err.message);
+        // Don't fail signup because of this
+      }
+    }
+
     // Generate JWT token
     const token = jwt.sign(
       { id: userId, email, role: 'user' },
