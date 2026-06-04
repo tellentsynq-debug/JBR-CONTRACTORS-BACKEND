@@ -131,15 +131,16 @@ exports.signup = async (req, res) => {
       .select();
 
     if (createError) {
-      console.error('Supabase Insert Error:', {
+      const errorInfo = {
         message: createError.message,
         code: createError.code,
         details: createError.details,
         hint: createError.hint
-      });
+      };
+      console.error('Supabase Insert Error:', errorInfo);
       return res.status(500).json({ 
         error: 'Failed to create user',
-        details: createError.message 
+        errorDetails: errorInfo
       });
     }
 
