@@ -2,6 +2,7 @@ const supabase = require('../config/database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
 
 // Generate OTP and send SMS
 const sendOTP = async (phoneNumber) => {
@@ -120,9 +121,8 @@ exports.signup = async (req, res) => {
       // If error is about email confirmation, create user anyway
       if (authError.message.includes('sending confirmation') || authError.message.includes('email')) {
         console.warn('Email confirmation failed, but proceeding with profile creation:', authError.message);
-        // For development, we'll continue without email confirmation
-        // In production, you should configure email provider in Supabase
-        userId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        // For development, generate a proper UUID
+        userId = uuidv4();
       } else {
         console.error('Supabase Auth Error:', authError);
         return res.status(500).json({ 
