@@ -122,8 +122,16 @@ exports.signup = async (req, res) => {
 
     if (authError) {
       console.warn(`Auth signup error for ${email}:`, authError);
+      console.warn(`Auth error details:`, {
+        message: authError.message,
+        code: authError.code,
+        status: authError.status,
+        allKeys: Object.keys(authError),
+        stringified: JSON.stringify(authError, null, 2)
+      });
+      
       // If error is about email confirmation, create user anyway
-      if (authError.message.includes('sending confirmation') || authError.message.includes('email')) {
+      if (authError.message?.includes('sending confirmation') || authError.message?.includes('email')) {
         console.warn('Email confirmation failed, but proceeding with profile creation:', authError.message);
         // For development, generate a proper UUID
         userId = uuidv4();
@@ -171,25 +179,40 @@ exports.signup = async (req, res) => {
     // Handle user table insert errors
     if (userError) {
       console.log(`User creation returned error:`, userError);
+      
+      // Extract all available error information
+      let errorMessage = userError.message;
+      let errorCode = userError.code;
+      
+      // Try different error structures
+      if (!errorMessage) {
+        if (userError.error_description) errorMessage = userError.error_description;
+        if (userError.msg) errorMessage = userError.msg;
+        if (typeof userError === 'string') errorMessage = userError;
+      }
+      
+      if (!errorCode) {
+        if (userError.status) errorCode = userError.status.toString();
+      }
+      
+      console.error('User Table Insert Error - Full Details:', {
+        message: errorMessage,
+        code: errorCode,
+        details: userError.details,
+        hint: userError.hint,
+        status: userError.status,
+        errorType: userError.constructor.name,
+        allKeys: Object.keys(userError),
+        stringified: JSON.stringify(userError, null, 2)
+      });
+      
       // Only ignore if it's a duplicate key error (user already exists)
-      if (userError.code !== '23505') {
-        // Log comprehensive error information
-        const errorInfo = {
-          message: userError.message,
-          code: userError.code,
-          details: userError.details,
-          hint: userError.hint,
-          status: userError.status,
-          errorType: userError.constructor.name,
-          fullError: JSON.stringify(userError)
-        };
-        console.error('User Table Insert Error:', errorInfo);
-        
+      if (errorCode !== '23505') {
         return res.status(500).json({ 
           error: 'Failed to create user record',
           errorDetails: {
-            message: userError.message || 'Unknown error',
-            code: userError.code || 'UNKNOWN',
+            message: errorMessage || 'Unknown database error',
+            code: errorCode || 'UNKNOWN',
             details: userError.details || null,
             hint: userError.hint || null,
             status: userError.status || 500
