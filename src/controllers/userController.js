@@ -165,65 +165,9 @@ exports.signup = async (req, res) => {
     }
 
     // Create user in public users table first (REQUIRED - foreign key constraint for user_roles)
-    // This must be done BEFORE creating profile because profile insert triggers user_roles insert
-    console.log(`Creating user record with ID: ${userId} and email: ${email}`);
-    
-    const { data: userData, error: userError } = await supabaseAdmin
-      .from('users')
-      .insert([{
-        id: userId,
-        email,
-        created_at: new Date().toISOString()
-      }])
-      .select();
+    // SKIPPED - We'll only use auth.users and profiles
+    console.log(`Skipping users table insert - using auth.users only`);
 
-    // Handle user table insert errors
-    if (userError) {
-      console.log(`User creation returned error:`, userError);
-      
-      // Extract all available error information
-      let errorMessage = userError.message;
-      let errorCode = userError.code;
-      
-      // Try different error structures
-      if (!errorMessage) {
-        if (userError.error_description) errorMessage = userError.error_description;
-        if (userError.msg) errorMessage = userError.msg;
-        if (typeof userError === 'string') errorMessage = userError;
-      }
-      
-      if (!errorCode) {
-        if (userError.status) errorCode = userError.status.toString();
-      }
-      
-      console.error('User Table Insert Error - Full Details:', {
-        message: errorMessage,
-        code: errorCode,
-        details: userError.details,
-        hint: userError.hint,
-        status: userError.status,
-        errorType: userError.constructor.name,
-        allKeys: Object.keys(userError),
-        stringified: JSON.stringify(userError, null, 2)
-      });
-      
-      // Only ignore if it's a duplicate key error (user already exists)
-      if (errorCode !== '23505') {
-        return res.status(500).json({ 
-          error: 'Failed to create user record',
-          errorDetails: {
-            message: errorMessage || 'Unknown database error',
-            code: errorCode || 'UNKNOWN',
-            details: userError.details || null,
-            hint: userError.hint || null,
-            status: userError.status || 500
-          }
-        });
-      }
-      console.warn('User already exists in users table:', email);
-    } else {
-      console.log(`✓ User record created successfully for: ${email}`);
-    }
 
     // Store additional profile info in profiles table (using admin client to bypass RLS)
     console.log(`Creating profile for user ID: ${userId}`);
