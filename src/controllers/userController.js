@@ -141,23 +141,31 @@ exports.signup = async (req, res) => {
       userId = signUpData.user.id;
     }
 
-    // Create user in public users table first (required for FK constraint in profiles)
-    // Note: Try to create but don't fail if it does - the auth.users might be sufficient
-    try {
-      const { data: userData, error: userError } = await supabaseAdmin
-        .from('users')
-        .insert([{
-          id: userId,
-          email,
-          created_at: new Date().toISOString()
-        }])
-        .select();
+    // Create user in public users table first (REQUIRED - foreign key constraint for user_roles)
+    const { data: userData, error: userError } = await supabaseAdmin
+      .from('users')
+      .insert([{
+        id: userId,
+        email,
+        created_at: new Date().toISOString()
+      }])
+      .select();
 
-      if (userError && userError.code !== '23505') { // Ignore duplicate key error
-        console.warn('User Table Insert Warning (non-critical):', userError.message);
+    // Handle user table insert errors
+    if (userError) {
+      // Only ignore if it's a duplicate key error (user already exists)
+      if (userError.code !== '23505') {
+        console.error('User Table Insert Error:', userError);
+        return res.status(500).json({ 
+          error: 'Failed to create user record',
+          errorDetails: {
+            message: userError.message,
+            code: userError.code,
+            details: userError.details
+          }
+        });
       }
-    } catch (err) {
-      console.warn('User creation failed, continuing with profile:', err.message);
+      console.warn('User already exists in users table:', email);
     }
 
     // Store additional profile info in profiles table (using admin client to bypass RLS)
