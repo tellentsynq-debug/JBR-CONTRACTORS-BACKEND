@@ -131,7 +131,16 @@ exports.signup = async (req, res) => {
       .select();
 
     if (createError) {
-      return res.status(500).json({ error: 'Failed to create user' });
+      console.error('Supabase Insert Error:', {
+        message: createError.message,
+        code: createError.code,
+        details: createError.details,
+        hint: createError.hint
+      });
+      return res.status(500).json({ 
+        error: 'Failed to create user',
+        details: createError.message 
+      });
     }
 
     // Generate JWT token
