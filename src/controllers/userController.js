@@ -152,15 +152,23 @@ exports.signup = async (req, res) => {
       .select();
 
     if (userError) {
-      console.error('User Table Insert Error:', {
+      console.error('User Table Insert Error - Full Details:', {
         message: userError.message,
         code: userError.code,
         details: userError.details,
-        hint: userError.hint
+        hint: userError.hint,
+        status: userError.status,
+        fullError: JSON.stringify(userError)
       });
       return res.status(500).json({ 
         error: 'Failed to create user record',
-        errorDetails: userError
+        errorDetails: {
+          message: userError.message,
+          code: userError.code,
+          details: userError.details,
+          hint: userError.hint,
+          status: userError.status
+        }
       });
     }
 
