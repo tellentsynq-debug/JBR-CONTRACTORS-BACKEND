@@ -132,10 +132,38 @@ exports.signup = async (req, res) => {
       
       // If error is about email confirmation, create user anyway
       if (authError.message?.includes('sending confirmation') || authError.message?.includes('email')) {
-        console.warn('Email confirmation failed, but proceeding with profile creation:', authError.message);
-        // For development, generate a proper UUID
+        console.warn('Email confirmation failed, but proceeding with user creation:', authError.message);
+        
+        // Generate a proper UUID for the user
         userId = uuidv4();
         console.log(`Generated UUID for user: ${userId}`);
+        
+        // Create the user in auth.users using admin API
+        try {
+          console.log(`Creating user in auth.users with ID: ${userId}`);
+          const { data: authUser, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true, // Auto-confirm email so they can login immediately
+            user_metadata: {
+              email_verified: true,
+              first_name: firstName,
+              last_name: lastName
+            }
+          });
+          
+          if (createAuthError) {
+            console.error('Failed to create user in auth:', createAuthError);
+            // Fall back to using the UUID we generated
+            console.log('Falling back to UUID-based user creation');
+          } else if (authUser?.id) {
+            userId = authUser.id; // Use the real user ID from auth
+            console.log(`✓ User created in auth.users with ID: ${userId}`);
+          }
+        } catch (err) {
+          console.warn('Error creating user in auth (will use UUID fallback):', err.message);
+          // Continue with UUID fallback
+        }
       } else {
         console.error('Supabase Auth Error:', authError);
         return res.status(500).json({ 
@@ -205,11 +233,11 @@ exports.signup = async (req, res) => {
       console.log(`✓ Profile created successfully for user ID: ${userId}`);
     }
 
-    // Auto-confirm email so user can login immediately (always, regardless of auth success/failure)
-    if (userId) {
+    // Auto-confirm email for users created via normal signup (when authData exists but email not confirmed yet)
+    // Note: Users created via admin API fallback are already confirmed during creation
+    if (userId && authData && !authData.user?.email_confirmed_at) {
       console.log(`Auto-confirming email for user: ${email}`);
       try {
-        // Use admin API to confirm the email
         await supabaseAdmin.auth.admin.updateUserById(userId, {
           email_confirm: true,
           user_metadata: {
