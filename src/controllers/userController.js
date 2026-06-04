@@ -205,8 +205,8 @@ exports.signup = async (req, res) => {
       console.log(`✓ Profile created successfully for user ID: ${userId}`);
     }
 
-    // Auto-confirm email so user can login immediately (only if auth failed/generated UUID)
-    if (userId && authError) {
+    // Auto-confirm email so user can login immediately (always, regardless of auth success/failure)
+    if (userId) {
       console.log(`Auto-confirming email for user: ${email}`);
       try {
         // Use admin API to confirm the email
