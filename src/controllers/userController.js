@@ -103,26 +103,30 @@ exports.signup = async (req, res) => {
       });
     }
 
-    // Check if email already exists in profiles
-    const { data: existingUser } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', email)
-      .single();
+    // Sign up using Supabase Auth (creates user in auth.users)
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password
+    });
 
-    if (existingUser) {
-      return res.status(400).json({ error: 'Email already registered' });
+    if (authError) {
+      console.error('Supabase Auth Error:', authError);
+      return res.status(500).json({ 
+        error: 'Failed to create user',
+        errorDetails: {
+          message: authError.message,
+          code: authError.code,
+          status: authError.status
+        }
+      });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user in database
-    const { data: newUser, error: createError } = await supabase
+    // Store additional profile info in profiles table
+    const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .insert([{
+        id: authData.user.id,
         email,
-        password: hashedPassword,
         first_name: firstName,
         last_name: lastName,
         is_active: true,
@@ -130,23 +134,21 @@ exports.signup = async (req, res) => {
       }])
       .select();
 
-    if (createError) {
-      const errorInfo = {
-        message: createError.message,
-        code: createError.code,
-        details: createError.details,
-        hint: createError.hint
-      };
-      console.error('Supabase Insert Error:', errorInfo);
+    if (profileError) {
+      console.error('Profile Insert Error:', profileError);
       return res.status(500).json({ 
-        error: 'Failed to create user',
-        errorDetails: errorInfo
+        error: 'Failed to create profile',
+        errorDetails: {
+          message: profileError.message,
+          code: profileError.code,
+          details: profileError.details
+        }
       });
     }
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: newUser[0].id, email, role: 'user' },
+      { id: authData.user.id, email, role: 'user' },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -154,10 +156,10 @@ exports.signup = async (req, res) => {
     res.status(201).json({ 
       message: 'User registered successfully',
       user: {
-        id: newUser[0].id,
-        email: newUser[0].email,
-        firstName: newUser[0].first_name,
-        lastName: newUser[0].last_name
+        id: authData.user.id,
+        email,
+        firstName,
+        lastName
       },
       token
     });
@@ -180,26 +182,31 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Get user from database
-    const { data: user, error: queryError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('email', email)
-      .single();
+    // Sign in using Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
 
-    if (queryError || !user) {
+    if (authError) {
+      console.error('Supabase Auth Error:', authError);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Verify password
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+    // Get user profile
+    const { data: user, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Profile Query Error:', profileError);
     }
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: 'user' },
+      { id: authData.user.id, email, role: 'user' },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -208,10 +215,10 @@ exports.login = async (req, res) => {
       message: 'Login successful',
       token,
       user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name
+        id: authData.user.id,
+        email: authData.user.email,
+        firstName: user?.first_name || '',
+        lastName: user?.last_name || ''
       }
     });
   } catch (error) {
