@@ -1,4 +1,5 @@
 const supabase = require('../config/database');
+const supabaseAdmin = supabase.admin;
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
@@ -140,8 +141,8 @@ exports.signup = async (req, res) => {
       userId = signUpData.user.id;
     }
 
-    // Store additional profile info in profiles table
-    const { data: profileData, error: profileError } = await supabase
+    // Store additional profile info in profiles table (using admin client to bypass RLS)
+    const { data: profileData, error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert([{
         id: userId,
