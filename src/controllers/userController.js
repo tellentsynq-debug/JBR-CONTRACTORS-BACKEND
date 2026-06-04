@@ -99,9 +99,17 @@ exports.signup = async (req, res) => {
     }
 
     // Validate password length
-    if (password.length < 6) {
+    if (password.length < 8) {
       return res.status(400).json({ 
-        error: 'Password must be at least 6 characters' 
+        error: 'Password must be at least 8 characters' 
+      });
+    }
+
+    // Validate password strength (must have uppercase, lowercase, and number)
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+    if (!passwordRegex.test(password)) {
+      return res.status(400).json({ 
+        error: 'Password must contain at least one uppercase letter, one lowercase letter, and one number'
       });
     }
 
@@ -129,6 +137,16 @@ exports.signup = async (req, res) => {
         allKeys: Object.keys(authError),
         stringified: JSON.stringify(authError, null, 2)
       });
+      
+      // Handle weak password errors
+      if (authError.code === 'weak_password') {
+        console.warn('Weak password rejected:', authError.message);
+        return res.status(422).json({ 
+          error: 'Weak password',
+          message: 'Password is too weak or has been found in previous data breaches. Please choose a stronger, unique password.',
+          code: 'weak_password'
+        });
+      }
       
       // If error is about email confirmation, create user anyway
       if (authError.message?.includes('sending confirmation') || authError.message?.includes('email')) {
@@ -166,14 +184,11 @@ exports.signup = async (req, res) => {
         }
       } else {
         console.error('Supabase Auth Error:', authError);
-        return res.status(500).json({ 
+        return res.status(authError.status || 500).json({ 
           error: 'Failed to create user',
-          errorDetails: {
-            message: authError.message || 'Unknown error',
-            code: authError.code || 'UNKNOWN',
-            status: authError.status || 500,
-            hint: 'Please configure email provider in Supabase dashboard'
-          }
+          message: authError.message || 'Unknown error',
+          code: authError.code || 'UNKNOWN',
+          hint: 'Please configure email provider in Supabase dashboard'
         });
       }
     } else if (signUpData?.user?.id) {
