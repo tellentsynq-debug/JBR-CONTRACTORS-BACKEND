@@ -103,9 +103,9 @@ exports.signup = async (req, res) => {
       });
     }
 
-    // Check if email already exists in users
+    // Check if email already exists in profiles
     const { data: existingUser } = await supabase
-      .from('users')
+      .from('profiles')
       .select('id')
       .eq('email', email)
       .single();
@@ -119,13 +119,13 @@ exports.signup = async (req, res) => {
 
     // Create user in database
     const { data: newUser, error: createError } = await supabase
-      .from('users')
+      .from('profiles')
       .insert([{
         email,
         password: hashedPassword,
         first_name: firstName,
         last_name: lastName,
-        status: 'active',
+        is_active: true,
         created_at: new Date().toISOString()
       }])
       .select();
@@ -181,7 +181,7 @@ exports.login = async (req, res) => {
 
     // Get user from database
     const { data: user, error: queryError } = await supabase
-      .from('users')
+      .from('profiles')
       .select('*')
       .eq('email', email)
       .single();
@@ -224,7 +224,7 @@ exports.login = async (req, res) => {
 exports.getAllUsers = async (req, res) => {
   try {
     const { data: users, error } = await supabase
-      .from('users')
+      .from('profiles')
       .select('*');
 
     if (error) throw error;
@@ -240,7 +240,7 @@ exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params;
     const { data: user, error } = await supabase
-      .from('users')
+      .from('profiles')
       .select('*')
       .eq('id', id)
       .single();
@@ -267,7 +267,7 @@ exports.createUser = async (req, res) => {
     }
     
     const { data: user, error } = await supabase
-      .from('users')
+      .from('profiles')
       .insert([{ 
         first_name: firstName,
         last_name: lastName,
@@ -298,7 +298,7 @@ exports.updateUser = async (req, res) => {
     const { firstName, lastName, email, phoneNumber } = req.body;
     
     const { error } = await supabase
-      .from('users')
+      .from('profiles')
       .update({
         first_name: firstName,
         last_name: lastName,
@@ -321,7 +321,7 @@ exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
     const { data, error } = await supabase
-      .from('users')
+      .from('profiles')
       .delete()
       .eq('id', id);
 
