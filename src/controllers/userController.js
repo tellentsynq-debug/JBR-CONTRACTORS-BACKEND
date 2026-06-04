@@ -129,16 +129,26 @@ exports.signup = async (req, res) => {
         return res.status(500).json({ 
           error: 'Failed to create user',
           errorDetails: {
-            message: authError.message,
-            code: authError.code,
-            status: authError.status,
+            message: authError.message || 'Unknown error',
+            code: authError.code || 'UNKNOWN',
+            status: authError.status || 500,
             hint: 'Please configure email provider in Supabase dashboard'
           }
         });
       }
-    } else {
+    } else if (signUpData?.user?.id) {
       authData = signUpData;
       userId = signUpData.user.id;
+    } else {
+      console.error('Unexpected signup response - no user ID:', signUpData);
+      return res.status(500).json({ 
+        error: 'Failed to create user',
+        errorDetails: {
+          message: 'No user ID returned from signup',
+          code: 'NO_USER_ID',
+          status: 500
+        }
+      });
     }
 
     // Create user in public users table first (REQUIRED - foreign key constraint for user_roles)
@@ -155,13 +165,20 @@ exports.signup = async (req, res) => {
     if (userError) {
       // Only ignore if it's a duplicate key error (user already exists)
       if (userError.code !== '23505') {
-        console.error('User Table Insert Error:', userError);
+        console.error('User Table Insert Error:', {
+          message: userError.message,
+          code: userError.code,
+          details: userError.details,
+          hint: userError.hint,
+          full: userError
+        });
         return res.status(500).json({ 
           error: 'Failed to create user record',
           errorDetails: {
-            message: userError.message,
-            code: userError.code,
-            details: userError.details
+            message: userError.message || 'Unknown error',
+            code: userError.code || 'UNKNOWN',
+            details: userError.details || null,
+            hint: userError.hint || null
           }
         });
       }
@@ -182,13 +199,20 @@ exports.signup = async (req, res) => {
       .select();
 
     if (profileError) {
-      console.error('Profile Insert Error:', profileError);
+      console.error('Profile Insert Error:', {
+        message: profileError.message,
+        code: profileError.code,
+        details: profileError.details,
+        hint: profileError.hint,
+        full: profileError
+      });
       return res.status(500).json({ 
         error: 'Failed to create profile',
         errorDetails: {
-          message: profileError.message,
-          code: profileError.code,
-          details: profileError.details
+          message: profileError.message || 'Unknown error',
+          code: profileError.code || 'UNKNOWN',
+          details: profileError.details || null,
+          hint: profileError.hint || null
         }
       });
     }
