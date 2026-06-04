@@ -110,6 +110,8 @@ exports.signup = async (req, res) => {
     let authData = null;
     let userId = null;
 
+    console.log(`Attempting to sign up user: ${email}`);
+    
     const { data: signUpData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -119,11 +121,13 @@ exports.signup = async (req, res) => {
     });
 
     if (authError) {
+      console.warn(`Auth signup error for ${email}:`, authError);
       // If error is about email confirmation, create user anyway
       if (authError.message.includes('sending confirmation') || authError.message.includes('email')) {
         console.warn('Email confirmation failed, but proceeding with profile creation:', authError.message);
         // For development, generate a proper UUID
         userId = uuidv4();
+        console.log(`Generated UUID for user: ${userId}`);
       } else {
         console.error('Supabase Auth Error:', authError);
         return res.status(500).json({ 
@@ -139,6 +143,7 @@ exports.signup = async (req, res) => {
     } else if (signUpData?.user?.id) {
       authData = signUpData;
       userId = signUpData.user.id;
+      console.log(`✓ Auth signup successful, user ID: ${userId}`);
     } else {
       console.error('Unexpected signup response - no user ID:', signUpData);
       return res.status(500).json({ 
@@ -152,6 +157,8 @@ exports.signup = async (req, res) => {
     }
 
     // Create user in public users table first (REQUIRED - foreign key constraint for user_roles)
+    console.log(`Creating user record with ID: ${userId} and email: ${email}`);
+    
     const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
       .insert([{
@@ -163,29 +170,40 @@ exports.signup = async (req, res) => {
 
     // Handle user table insert errors
     if (userError) {
+      console.log(`User creation returned error:`, userError);
       // Only ignore if it's a duplicate key error (user already exists)
       if (userError.code !== '23505') {
-        console.error('User Table Insert Error:', {
+        // Log comprehensive error information
+        const errorInfo = {
           message: userError.message,
           code: userError.code,
           details: userError.details,
           hint: userError.hint,
-          full: userError
-        });
+          status: userError.status,
+          errorType: userError.constructor.name,
+          fullError: JSON.stringify(userError)
+        };
+        console.error('User Table Insert Error:', errorInfo);
+        
         return res.status(500).json({ 
           error: 'Failed to create user record',
           errorDetails: {
             message: userError.message || 'Unknown error',
             code: userError.code || 'UNKNOWN',
             details: userError.details || null,
-            hint: userError.hint || null
+            hint: userError.hint || null,
+            status: userError.status || 500
           }
         });
       }
       console.warn('User already exists in users table:', email);
+    } else {
+      console.log(`✓ User record created successfully for: ${email}`);
     }
 
     // Store additional profile info in profiles table (using admin client to bypass RLS)
+    console.log(`Creating profile for user ID: ${userId}`);
+    
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert([{
@@ -215,6 +233,8 @@ exports.signup = async (req, res) => {
           hint: profileError.hint || null
         }
       });
+    } else {
+      console.log(`✓ Profile created successfully for user ID: ${userId}`);
     }
 
     // Generate JWT token
@@ -236,8 +256,21 @@ exports.signup = async (req, res) => {
       token
     });
   } catch (error) {
-    console.error('Signup error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Signup error - Unexpected exception:', {
+      message: error?.message || 'Unknown error',
+      code: error?.code,
+      stack: error?.stack,
+      errorType: error?.constructor?.name,
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    });
+    res.status(500).json({ 
+      error: 'An unexpected error occurred during signup',
+      errorDetails: {
+        message: error?.message || 'Unknown error',
+        code: error?.code || 'EXCEPTION',
+        type: error?.constructor?.name
+      }
+    });
   }
 };
 
