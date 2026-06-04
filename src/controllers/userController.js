@@ -152,8 +152,16 @@ exports.signup = async (req, res) => {
       .select();
 
     if (userError) {
-      console.error('User Table Insert Error:', userError);
-      // Continue anyway - it might already exist
+      console.error('User Table Insert Error:', {
+        message: userError.message,
+        code: userError.code,
+        details: userError.details,
+        hint: userError.hint
+      });
+      return res.status(500).json({ 
+        error: 'Failed to create user record',
+        errorDetails: userError
+      });
     }
 
     // Store additional profile info in profiles table (using admin client to bypass RLS)
