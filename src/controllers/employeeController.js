@@ -1,0 +1,454 @@
+const supabaseModule = require('../config/database');
+const supabaseAdmin = supabaseModule.admin;
+
+// Get all employees/candidates with filters
+exports.getAllEmployees = async (req, res) => {
+  try {
+    const { 
+      campaign_id, 
+      job_category_id, 
+      job_industry_id, 
+      verification_status,
+      search,
+      limit = 10,
+      offset = 0 
+    } = req.query;
+
+    let query = supabaseAdmin
+      .from('candidates')
+      .select(
+        `id, first_name, last_name, email, phone_number, 
+         gender, date_of_birth, city, province, postal_code,
+         job_category_id, job_industry_id, campaign_id,
+         verification_status, available_from, permit_status,
+         shift_preference, license_required, license_expiry_month,
+         license_expiry_year, resume_url, created_at, updated_at,
+         job_categories:job_category_id(id, name),
+         job_industries:job_industry_id(id, name),
+         campaigns:campaign_id(id, name)`,
+        { count: 'exact' }
+      )
+      .is('deleted_at', null); // Exclude soft-deleted records
+
+    // Apply filters
+    if (campaign_id) {
+      query = query.eq('campaign_id', campaign_id);
+    }
+    if (job_category_id) {
+      query = query.eq('job_category_id', job_category_id);
+    }
+    if (job_industry_id) {
+      query = query.eq('job_industry_id', job_industry_id);
+    }
+    if (verification_status) {
+      query = query.eq('verification_status', verification_status);
+    }
+
+    // Search by name or email
+    if (search) {
+      query = query.or(
+        `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`
+      );
+    }
+
+    // Pagination and sorting
+    query = query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Supabase fetch error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({
+      data,
+      pagination: {
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        total: count
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get employee by ID
+exports.getEmployeeById = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid employee ID format' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('candidates')
+      .select(
+        `id, first_name, last_name, email, phone_number,
+         gender, date_of_birth, city, province, postal_code,
+         job_category_id, job_industry_id, campaign_id,
+         verification_status, available_from, permit_status,
+         shift_preference, license_required, license_expiry_month,
+         license_expiry_year, resume_url, created_at, updated_at,
+         job_categories:job_category_id(id, name),
+         job_industries:job_industry_id(id, name),
+         campaigns:campaign_id(id, name)`
+      )
+      .eq('id', id)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Employee not found' });
+      }
+      console.error('Supabase fetch error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Create employee
+exports.createEmployee = async (req, res) => {
+  try {
+    const {
+      first_name,
+      last_name,
+      email,
+      phone_number,
+      gender,
+      date_of_birth,
+      city,
+      province,
+      postal_code,
+      job_category_id,
+      job_industry_id,
+      campaign_id,
+      available_from,
+      permit_status,
+      shift_preference,
+      license_required,
+      license_expiry_month,
+      license_expiry_year,
+      resume_url
+    } = req.body;
+
+    // Validation
+    if (!first_name || !last_name || !email || !phone_number) {
+      return res.status(400).json({
+        error: 'first_name, last_name, email, and phone_number are required'
+      });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('candidates')
+      .insert([
+        {
+          first_name,
+          last_name,
+          email,
+          phone_number,
+          gender,
+          date_of_birth,
+          city,
+          province,
+          postal_code,
+          job_category_id,
+          job_industry_id,
+          campaign_id,
+          verification_status: 'pending',
+          available_from,
+          permit_status: permit_status || 'not_checked',
+          shift_preference,
+          license_required,
+          license_expiry_month,
+          license_expiry_year,
+          resume_url,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ])
+      .select();
+
+    if (error) {
+      console.error('Supabase insert error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(201).json({
+      ...data[0],
+      message: 'Employee created successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update employee
+exports.updateEmployee = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid employee ID format' });
+    }
+
+    const {
+      first_name,
+      last_name,
+      email,
+      phone_number,
+      gender,
+      date_of_birth,
+      city,
+      province,
+      postal_code,
+      job_category_id,
+      job_industry_id,
+      campaign_id,
+      verification_status,
+      available_from,
+      permit_status,
+      shift_preference,
+      license_required,
+      license_expiry_month,
+      license_expiry_year,
+      resume_url
+    } = req.body;
+
+    const updateData = {};
+    if (first_name !== undefined) updateData.first_name = first_name;
+    if (last_name !== undefined) updateData.last_name = last_name;
+    if (email !== undefined) updateData.email = email;
+    if (phone_number !== undefined) updateData.phone_number = phone_number;
+    if (gender !== undefined) updateData.gender = gender;
+    if (date_of_birth !== undefined) updateData.date_of_birth = date_of_birth;
+    if (city !== undefined) updateData.city = city;
+    if (province !== undefined) updateData.province = province;
+    if (postal_code !== undefined) updateData.postal_code = postal_code;
+    if (job_category_id !== undefined) updateData.job_category_id = job_category_id;
+    if (job_industry_id !== undefined) updateData.job_industry_id = job_industry_id;
+    if (campaign_id !== undefined) updateData.campaign_id = campaign_id;
+    if (verification_status !== undefined) updateData.verification_status = verification_status;
+    if (available_from !== undefined) updateData.available_from = available_from;
+    if (permit_status !== undefined) updateData.permit_status = permit_status;
+    if (shift_preference !== undefined) updateData.shift_preference = shift_preference;
+    if (license_required !== undefined) updateData.license_required = license_required;
+    if (license_expiry_month !== undefined) updateData.license_expiry_month = license_expiry_month;
+    if (license_expiry_year !== undefined) updateData.license_expiry_year = license_expiry_year;
+    if (resume_url !== undefined) updateData.resume_url = resume_url;
+    updateData.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabaseAdmin
+      .from('candidates')
+      .update(updateData)
+      .eq('id', id)
+      .is('deleted_at', null)
+      .select();
+
+    if (error) {
+      console.error('Supabase update error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    if (data.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    res.json({
+      ...data[0],
+      message: 'Employee updated successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Delete employee (soft delete)
+exports.deleteEmployee = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid employee ID format' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('candidates')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Supabase delete error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ message: 'Employee deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Verify employee
+exports.verifyEmployee = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid employee ID format' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('candidates')
+      .update({
+        verification_status: 'verified',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .is('deleted_at', null)
+      .select();
+
+    if (error) {
+      console.error('Supabase update error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    if (data.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    res.json({
+      id: data[0].id,
+      verification_status: 'verified',
+      message: 'Employee verified successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Reject employee
+exports.rejectEmployee = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid employee ID format' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('candidates')
+      .update({
+        verification_status: 'rejected',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .is('deleted_at', null)
+      .select();
+
+    if (error) {
+      console.error('Supabase update error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    if (data.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    res.json({
+      id: data[0].id,
+      verification_status: 'rejected',
+      message: 'Employee rejected successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get employees by campaign
+exports.getEmployeesByCampaign = async (req, res) => {
+  try {
+    const campaign_id = parseInt(req.params.campaign_id);
+    if (isNaN(campaign_id)) {
+      return res.status(400).json({ error: 'Invalid campaign ID format' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('candidates')
+      .select(
+        `id, first_name, last_name, email, phone_number,
+         verification_status, created_at,
+         job_categories:job_category_id(name),
+         job_industries:job_industry_id(name)`,
+        { count: 'exact' }
+      )
+      .eq('campaign_id', campaign_id)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase fetch error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ data, total: data.length });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get verification stats
+exports.getVerificationStats = async (req, res) => {
+  try {
+    const { campaign_id } = req.query;
+
+    let query = supabaseAdmin
+      .from('candidates')
+      .select('verification_status', { count: 'exact' });
+
+    if (campaign_id) {
+      query = query.eq('campaign_id', campaign_id);
+    }
+
+    query = query.is('deleted_at', null);
+
+    // Get pending count
+    const { count: pendingCount } = await query
+      .eq('verification_status', 'pending');
+
+    // Get verified count
+    const { count: verifiedCount } = await supabaseAdmin
+      .from('candidates')
+      .select('id', { count: 'exact' })
+      .eq('verification_status', 'verified')
+      .is('deleted_at', null);
+
+    // Get rejected count
+    const { count: rejectedCount } = await supabaseAdmin
+      .from('candidates')
+      .select('id', { count: 'exact' })
+      .eq('verification_status', 'rejected')
+      .is('deleted_at', null);
+
+    res.json({
+      pending: pendingCount || 0,
+      verified: verifiedCount || 0,
+      rejected: rejectedCount || 0,
+      total: (pendingCount || 0) + (verifiedCount || 0) + (rejectedCount || 0)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};

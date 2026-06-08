@@ -18,12 +18,14 @@ app.get('/', (req, res) => {
 // Import routes
 const userRoutes = require('./routes/users');
 const campaignRoutes = require('./routes/campaigns');
+const employeeRoutes = require('./routes/employees');
 const jobIndustryRoutes = require('./routes/jobIndustries');
 const jobCategoryRoutes = require('./routes/jobCategories');
 const superAdminRoutes = require('./routes/superAdmins');
 const adminRoutes = require('./routes/admins');
 app.use('/api/users', userRoutes);
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/employees', employeeRoutes);
 app.use('/api/job-industries', jobIndustryRoutes);
 app.use('/api/job-categories', jobCategoryRoutes);
 app.use('/api/super-admins', superAdminRoutes);
