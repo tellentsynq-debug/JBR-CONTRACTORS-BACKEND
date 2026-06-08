@@ -61,6 +61,7 @@ exports.createCampaign = async (req, res) => {
       link_token: campaign.link_token,
       created_by: campaign.created_by,
       created_at: campaign.created_at,
+      updated_at: campaign.updated_at,
       message: 'Campaign created successfully'
     });
   } catch (error) {
@@ -92,7 +93,10 @@ exports.getAllCampaigns = async (req, res) => {
 // Get campaign by ID
 exports.getCampaignById = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid campaign ID format' });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('campaigns')
@@ -118,7 +122,10 @@ exports.getCampaignById = async (req, res) => {
 // Update campaign
 exports.updateCampaign = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid campaign ID format' });
+    }
     const { name, start_date, end_date, is_active } = req.body;
 
     // Validate that end_date > start_date if both are provided
@@ -173,7 +180,10 @@ exports.updateCampaign = async (req, res) => {
 // Delete campaign
 exports.deleteCampaign = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid campaign ID format' });
+    }
 
     const { error } = await supabaseAdmin
       .from('campaigns')
@@ -195,7 +205,10 @@ exports.deleteCampaign = async (req, res) => {
 // Activate campaign
 exports.activateCampaign = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid campaign ID format' });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('campaigns')
@@ -226,7 +239,10 @@ exports.activateCampaign = async (req, res) => {
 // Deactivate campaign
 exports.deactivateCampaign = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid campaign ID format' });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('campaigns')
@@ -257,7 +273,10 @@ exports.deactivateCampaign = async (req, res) => {
 // Get campaign registration link (for employees to register)
 exports.getCampaignLink = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid campaign ID format' });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('campaigns')
