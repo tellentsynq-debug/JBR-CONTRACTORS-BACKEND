@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
-const supabase = require('../config/database');
+const supabaseModule = require('../config/database');
+const supabaseAdmin = supabaseModule.admin; // Use admin client to bypass RLS
 
 // Generate unique link token
 const generateLinkToken = () => uuidv4();
@@ -29,7 +30,7 @@ exports.createCampaign = async (req, res) => {
     // Generate unique link token for registration link
     const link_token = generateLinkToken();
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('campaigns')
       .insert([
         {
@@ -71,7 +72,7 @@ exports.createCampaign = async (req, res) => {
 // Get all campaigns
 exports.getAllCampaigns = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('campaigns')
       .select('*')
       .order('created_at', { ascending: false });
@@ -93,7 +94,7 @@ exports.getCampaignById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('campaigns')
       .select('*')
       .eq('id', id)
@@ -138,7 +139,7 @@ exports.updateCampaign = async (req, res) => {
     if (is_active !== undefined) updateData.is_active = is_active;
     updateData.updated_at = new Date().toISOString();
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('campaigns')
       .update(updateData)
       .eq('id', id)
@@ -174,7 +175,7 @@ exports.deleteCampaign = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('campaigns')
       .delete()
       .eq('id', id);
@@ -196,7 +197,7 @@ exports.activateCampaign = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('campaigns')
       .update({ is_active: true, updated_at: new Date().toISOString() })
       .eq('id', id)
@@ -227,7 +228,7 @@ exports.deactivateCampaign = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('campaigns')
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('id', id)
@@ -258,7 +259,7 @@ exports.getCampaignLink = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('campaigns')
       .select('id, name, link_token, is_active')
       .eq('id', id)
