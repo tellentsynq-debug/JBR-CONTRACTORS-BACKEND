@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+const supabase = require('../config/database');
 
 // Create a new job industry
 exports.createJobIndustry = async (req, res) => {

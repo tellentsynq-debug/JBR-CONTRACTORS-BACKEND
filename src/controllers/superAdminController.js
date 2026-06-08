@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+const supabase = require('../config/database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
