@@ -1,33 +1,65 @@
-const pool = require('../config/database');
+const { v4: uuidv4 } = require('uuid');
+const supabase = require('../config/database');
+
+// Generate unique link token
+const generateLinkToken = () => uuidv4();
 
 // Create campaign
 exports.createCampaign = async (req, res) => {
   try {
-    const { name, startDate, endDate } = req.body;
+    const { name, start_date, end_date, is_active } = req.body;
+    const created_by = req.userId; // From authMiddleware
 
-    // Validation
-    if (!name || !startDate || !endDate) {
+    // Validation: Required fields
+    if (!name || !start_date || !end_date) {
       return res.status(400).json({
         error: 'Campaign name, start date, and end date are required'
       });
     }
 
-    const status = 'active'; // Default status
+    // Validation: End date must be greater than start date
+    const startDate = new Date(start_date);
+    const endDate = new Date(end_date);
+    if (endDate <= startDate) {
+      return res.status(400).json({
+        error: 'End date must be after start date'
+      });
+    }
 
-    const connection = await pool.getConnection();
-    
-    const [result] = await connection.query(
-      'INSERT INTO campaigns (name, start_date, end_date, status) VALUES (?, ?, ?, ?)',
-      [name, startDate, endDate, status]
-    );
-    connection.release();
+    // Generate unique link token for registration link
+    const link_token = generateLinkToken();
 
+    const { data, error } = await supabase
+      .from('campaigns')
+      .insert([
+        {
+          name,
+          start_date,
+          end_date,
+          is_active: is_active !== undefined ? is_active : true,
+          link_token,
+          created_by,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ])
+      .select();
+
+    if (error) {
+      console.error('Supabase insert error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    const campaign = data[0];
     res.status(201).json({
-      id: result.insertId,
-      name,
-      startDate,
-      endDate,
-      status,
+      id: campaign.id,
+      name: campaign.name,
+      start_date: campaign.start_date,
+      end_date: campaign.end_date,
+      is_active: campaign.is_active,
+      link_token: campaign.link_token,
+      created_by: campaign.created_by,
+      created_at: campaign.created_at,
       message: 'Campaign created successfully'
     });
   } catch (error) {
@@ -39,10 +71,17 @@ exports.createCampaign = async (req, res) => {
 // Get all campaigns
 exports.getAllCampaigns = async (req, res) => {
   try {
-    const connection = await pool.getConnection();
-    const [rows] = await connection.query('SELECT * FROM campaigns ORDER BY created_at DESC');
-    connection.release();
-    res.json(rows);
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase fetch error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json(data);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -53,14 +92,22 @@ exports.getAllCampaigns = async (req, res) => {
 exports.getCampaignById = async (req, res) => {
   try {
     const { id } = req.params;
-    const connection = await pool.getConnection();
-    const [rows] = await connection.query('SELECT * FROM campaigns WHERE id = ?', [id]);
-    connection.release();
 
-    if (rows.length === 0) {
-      return res.status(404).json({ error: 'Campaign not found' });
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+      console.error('Supabase fetch error:', error);
+      return res.status(400).json({ error: error.message });
     }
-    res.json(rows[0]);
+
+    res.json(data);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -71,22 +118,49 @@ exports.getCampaignById = async (req, res) => {
 exports.updateCampaign = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, startDate, endDate, status } = req.body;
+    const { name, start_date, end_date, is_active } = req.body;
 
-    const connection = await pool.getConnection();
+    // Validate that end_date > start_date if both are provided
+    if (start_date && end_date) {
+      const startDate = new Date(start_date);
+      const endDate = new Date(end_date);
+      if (endDate <= startDate) {
+        return res.status(400).json({
+          error: 'End date must be after start date'
+        });
+      }
+    }
 
-    await connection.query(
-      'UPDATE campaigns SET name = ?, start_date = ?, end_date = ?, status = ? WHERE id = ?',
-      [name, startDate, endDate, status, id]
-    );
-    connection.release();
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (start_date !== undefined) updateData.start_date = start_date;
+    if (end_date !== undefined) updateData.end_date = end_date;
+    if (is_active !== undefined) updateData.is_active = is_active;
+    updateData.updated_at = new Date().toISOString();
 
+    const { data, error } = await supabase
+      .from('campaigns')
+      .update(updateData)
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error('Supabase update error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    if (data.length === 0) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    const campaign = data[0];
     res.json({
-      id,
-      name,
-      startDate,
-      endDate,
-      status,
+      id: campaign.id,
+      name: campaign.name,
+      start_date: campaign.start_date,
+      end_date: campaign.end_date,
+      is_active: campaign.is_active,
+      updated_at: campaign.updated_at,
       message: 'Campaign updated successfully'
     });
   } catch (error) {
@@ -99,13 +173,17 @@ exports.updateCampaign = async (req, res) => {
 exports.deleteCampaign = async (req, res) => {
   try {
     const { id } = req.params;
-    const connection = await pool.getConnection();
-    const [result] = await connection.query('DELETE FROM campaigns WHERE id = ?', [id]);
-    connection.release();
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Campaign not found' });
+    const { error } = await supabase
+      .from('campaigns')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Supabase delete error:', error);
+      return res.status(400).json({ error: error.message });
     }
+
     res.json({ message: 'Campaign deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -117,33 +195,25 @@ exports.deleteCampaign = async (req, res) => {
 exports.activateCampaign = async (req, res) => {
   try {
     const { id } = req.params;
-    const connection = await pool.getConnection();
-    
-    // Check current status
-    const [rows] = await connection.query('SELECT status FROM campaigns WHERE id = ?', [id]);
-    
-    if (rows.length === 0) {
-      connection.release();
+
+    const { data, error } = await supabase
+      .from('campaigns')
+      .update({ is_active: true, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error('Supabase update error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    if (data.length === 0) {
       return res.status(404).json({ error: 'Campaign not found' });
     }
 
-    if (rows[0].status === 'active') {
-      connection.release();
-      return res.status(400).json({ 
-        error: 'Campaign is already active',
-        status: 'active'
-      });
-    }
-
-    const [result] = await connection.query(
-      'UPDATE campaigns SET status = ? WHERE id = ?',
-      ['active', id]
-    );
-    connection.release();
-
     res.json({
-      id,
-      status: 'active',
+      id: data[0].id,
+      is_active: true,
       message: 'Campaign activated successfully'
     });
   } catch (error) {
@@ -156,34 +226,65 @@ exports.activateCampaign = async (req, res) => {
 exports.deactivateCampaign = async (req, res) => {
   try {
     const { id } = req.params;
-    const connection = await pool.getConnection();
-    
-    // Check current status
-    const [rows] = await connection.query('SELECT status FROM campaigns WHERE id = ?', [id]);
-    
-    if (rows.length === 0) {
-      connection.release();
+
+    const { data, error } = await supabase
+      .from('campaigns')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error('Supabase update error:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    if (data.length === 0) {
       return res.status(404).json({ error: 'Campaign not found' });
     }
 
-    if (rows[0].status === 'inactive') {
-      connection.release();
-      return res.status(400).json({ 
-        error: 'Campaign is already inactive',
-        status: 'inactive'
-      });
+    res.json({
+      id: data[0].id,
+      is_active: false,
+      message: 'Campaign deactivated successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get campaign registration link (for employees to register)
+exports.getCampaignLink = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('id, name, link_token, is_active')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+      console.error('Supabase fetch error:', error);
+      return res.status(400).json({ error: error.message });
     }
 
-    const [result] = await connection.query(
-      'UPDATE campaigns SET status = ? WHERE id = ?',
-      ['inactive', id]
-    );
-    connection.release();
+    if (!data.is_active) {
+      return res.status(400).json({ error: 'Campaign is not active' });
+    }
+
+    // Construct the registration link
+    const origin = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const registrationLink = `${origin}/employee_register?token=${data.link_token}`;
 
     res.json({
-      id,
-      status: 'inactive',
-      message: 'Campaign deactivated successfully'
+      campaign_id: data.id,
+      campaign_name: data.name,
+      registration_link: registrationLink,
+      token: data.link_token
     });
   } catch (error) {
     console.error(error);
