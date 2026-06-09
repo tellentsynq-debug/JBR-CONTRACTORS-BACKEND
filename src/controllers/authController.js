@@ -348,6 +348,86 @@ exports.signOut = async (req, res) => {
   }
 };
 
+// Get Token Details (JWT Verification and Decoding)
+exports.getTokenDetails = async (req, res) => {
+  try {
+    const jwt = require('jsonwebtoken');
+    
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authorization header missing or invalid',
+        code: 'NO_TOKEN'
+      });
+    }
+
+    const token = authHeader.substring(7); // Remove "Bearer " prefix
+
+    // Verify and decode token
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+      { algorithms: ['HS256'] }
+    );
+
+    // Calculate expiry time remaining
+    const expiresAt = new Date(decoded.exp * 1000);
+    const expiresIn = Math.floor((decoded.exp * 1000 - Date.now()) / 1000); // seconds
+    const issuedAt = new Date(decoded.iat * 1000);
+
+    res.status(200).json({
+      success: true,
+      token: {
+        // Payload data
+        email: decoded.email,
+        verificationId: decoded.verificationId,
+        type: decoded.type,
+        
+        // Token metadata
+        issuedAt: issuedAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        expiresIn: expiresIn, // seconds remaining
+        isExpired: expiresIn <= 0,
+        
+        // Raw timestamps
+        iat: decoded.iat,
+        exp: decoded.exp,
+        
+        // Full decoded token
+        decoded: decoded
+      },
+      message: expiresIn > 0 ? 'Token is valid' : 'Token has expired'
+    });
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        error: 'Token has expired',
+        code: 'TOKEN_EXPIRED',
+        expiredAt: error.expiredAt
+      });
+    }
+    
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token signature or format',
+        code: 'INVALID_TOKEN'
+      });
+    }
+
+    console.error('Token verification error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: 'TOKEN_ERROR'
+    });
+  }
+};
+
 // Password Reset Request
 exports.resetPasswordRequest = async (req, res) => {
   try {
