@@ -123,7 +123,7 @@ exports.createEmployee = async (req, res) => {
     const {
       first_name,
       last_name,
-      email,
+      email: bodyEmail,
       phone_number,
       gender,
       date_of_birth,
@@ -142,10 +142,22 @@ exports.createEmployee = async (req, res) => {
       resume_url
     } = req.body;
 
+    // Use email from OTP token if available (for OTP verified users), otherwise use body email
+    const email = req.userEmail || bodyEmail;
+    const tokenType = req.tokenType || 'standard';
+
     // Validation
     if (!first_name || !last_name || !email || !phone_number) {
       return res.status(400).json({
         error: 'first_name, last_name, email, and phone_number are required'
+      });
+    }
+
+    // Additional validation for OTP-verified users
+    if (tokenType === 'email_verified' && email !== req.userEmail) {
+      return res.status(400).json({
+        error: 'Email in request must match your verified email',
+        verified_email: req.userEmail
       });
     }
 
@@ -165,7 +177,7 @@ exports.createEmployee = async (req, res) => {
           job_category_id,
           job_industry_id,
           campaign_id,
-          verification_status: 'pending',
+          verification_status: tokenType === 'email_verified' ? 'verified' : 'pending',
           available_from,
           permit_status: permit_status || 'not_checked',
           shift_preference,
@@ -185,8 +197,10 @@ exports.createEmployee = async (req, res) => {
     }
 
     res.status(201).json({
+      success: true,
       ...data[0],
-      message: 'Employee created successfully'
+      message: 'Employee created successfully',
+      email_verified: tokenType === 'email_verified'
     });
   } catch (error) {
     console.error(error);

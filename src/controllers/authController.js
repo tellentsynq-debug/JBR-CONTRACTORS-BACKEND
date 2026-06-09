@@ -238,6 +238,14 @@ exports.getCurrentUser = async (req, res) => {
     // Handle OTP verification token (email_verified type)
     if (tokenType === 'email_verified' && userEmail && !userId) {
       // Token already proves email verification, no need to query DB
+      
+      // Fetch full candidate registration data if exists
+      const { data: candidateData, error: candidateError } = await supabaseAdmin
+        .from('candidate_registrations')
+        .select('*')
+        .eq('email', userEmail)
+        .single();
+
       res.status(200).json({
         success: true,
         user: {
@@ -245,7 +253,22 @@ exports.getCurrentUser = async (req, res) => {
           email: userEmail,
           verificationId: verificationId,
           status: 'email_verified',
-          message: 'User authenticated via OTP verification - email confirmed'
+          message: 'User authenticated via OTP verification - email confirmed',
+          // Include full candidate data if registration exists
+          ...(candidateData && {
+            registration: {
+              id: candidateData.id,
+              phone: candidateData.phone,
+              first_name: candidateData.first_name,
+              last_name: candidateData.last_name,
+              resume_url: candidateData.resume_url,
+              campaign_id: candidateData.campaign_id,
+              status: candidateData.status,
+              email_verified: candidateData.email_verified,
+              created_at: candidateData.created_at,
+              updated_at: candidateData.updated_at
+            }
+          })
         }
       });
       return;
