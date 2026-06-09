@@ -211,9 +211,21 @@ exports.createEmployee = async (req, res) => {
 // Update employee
 exports.updateEmployee = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const id = req.params.id;
+    
+    // Validate UUID format (basic check)
+    if (!id || typeof id !== 'string' || id.length < 5) {
       return res.status(400).json({ error: 'Invalid employee ID format' });
+    }
+
+    // Support OTP token users updating their own profile
+    const tokenType = req.tokenType;
+    const userEmail = req.userEmail;
+    
+    // If OTP token user and ID is 'self', use email instead
+    let updateFilter = { field: 'id', value: id };
+    if (tokenType === 'email_verified' && userEmail && id === 'self') {
+      updateFilter = { field: 'email', value: userEmail };
     }
 
     const {
@@ -262,12 +274,15 @@ exports.updateEmployee = async (req, res) => {
     if (resume_url !== undefined) updateData.resume_url = resume_url;
     updateData.updated_at = new Date().toISOString();
 
-    const { data, error } = await supabaseAdmin
+    // Build query with proper filter
+    let query = supabaseAdmin
       .from('candidates')
       .update(updateData)
-      .eq('id', id)
+      .eq(updateFilter.field, updateFilter.value)
       .is('deleted_at', null)
       .select();
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Supabase update error:', error);
@@ -275,10 +290,11 @@ exports.updateEmployee = async (req, res) => {
     }
 
     if (data.length === 0) {
-      return res.status(404).json({ error: 'Employee not found' });
+      return res.status(404).json({ error: 'Employee not found or already deleted' });
     }
 
     res.json({
+      success: true,
       ...data[0],
       message: 'Employee updated successfully'
     });
