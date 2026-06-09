@@ -237,30 +237,15 @@ exports.getCurrentUser = async (req, res) => {
 
     // Handle OTP verification token (email_verified type)
     if (tokenType === 'email_verified' && userEmail && !userId) {
-      const { data: verification, error: verifyError } = await supabaseAdmin
-        .from('email_verifications')
-        .select('*')
-        .eq('email', userEmail)
-        .eq('verified', true)
-        .single();
-
-      if (verifyError || !verification) {
-        return res.status(404).json({
-          success: false,
-          error: 'Email verification record not found'
-        });
-      }
-
+      // Token already proves email verification, no need to query DB
       res.status(200).json({
         success: true,
         user: {
           type: 'otp_verified',
           email: userEmail,
           verificationId: verificationId,
-          verifiedAt: verification.verified_at,
-          campaignId: verification.campaign_id,
           status: 'email_verified',
-          message: 'User authenticated via OTP verification'
+          message: 'User authenticated via OTP verification - email confirmed'
         }
       });
       return;
