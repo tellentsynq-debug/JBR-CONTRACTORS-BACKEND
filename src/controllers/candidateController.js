@@ -67,14 +67,14 @@ exports.sendOTP = async (req, res) => {
       });
     }
 
-    // SECURITY: Rate limit check - max 3 OTP requests per hour per email
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    // SECURITY: Rate limit check - max 10 OTP requests per 10 minutes per email
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     
     const { data: recentRequests, error: queryError } = await supabaseAdmin
       .from('otp_request_logs')
       .select('*')
       .eq('email', email)
-      .gte('created_at', oneHourAgo);
+      .gte('created_at', tenMinutesAgo);
 
     if (queryError) {
       console.error('Rate limit check error:', queryError);
@@ -85,15 +85,15 @@ exports.sendOTP = async (req, res) => {
       });
     }
 
-    if (recentRequests && recentRequests.length >= 3) {
+    if (recentRequests && recentRequests.length >= 10) {
       // Log failed attempt
       await securityMiddleware.logRegistrationAttempt(supabaseAdmin, clientIP, email, 'send_otp', false);
       
       return res.status(429).json({
         success: false,
-        error: 'Too many OTP requests. Please try again after 1 hour.',
+        error: 'Too many OTP requests. Please try again after 10 minutes.',
         code: 'RATE_LIMITED',
-        retryAfter: 3600
+        retryAfter: 600
       });
     }
 
