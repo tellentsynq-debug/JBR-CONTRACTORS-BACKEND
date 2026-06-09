@@ -24,6 +24,7 @@ const jobIndustryRoutes = require('./routes/jobIndustries');
 const jobCategoryRoutes = require('./routes/jobCategories');
 const superAdminRoutes = require('./routes/superAdmins');
 const adminRoutes = require('./routes/admins');
+const candidateRoutes = require('./routes/candidates');
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/campaigns', campaignRoutes);
@@ -32,6 +33,7 @@ app.use('/api/job-industries', jobIndustryRoutes);
 app.use('/api/job-categories', jobCategoryRoutes);
 app.use('/api/super-admins', superAdminRoutes);
 app.use('/api/admins', adminRoutes);
+app.use('/api/candidates', candidateRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
