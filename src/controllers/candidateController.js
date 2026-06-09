@@ -254,11 +254,12 @@ exports.verifyOTP = async (req, res) => {
       });
     }
 
-    // Fetch verification record
+    // Fetch verification record (unverified only)
     const { data: verification, error: queryError } = await supabaseAdmin
       .from('email_verifications')
       .select('*')
       .eq('email', email)
+      .eq('verified', false)
       .single();
 
     if (queryError || !verification) {
