@@ -10,8 +10,13 @@ exports.verifyToken = (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-    req.userId = decoded.id;
-    req.userEmail = decoded.email;
+    
+    // Support both Supabase JWT (with id) and OTP verification JWT (with email)
+    req.userId = decoded.id || null;
+    req.userEmail = decoded.email || null;
+    req.tokenType = decoded.type || 'standard'; // 'email_verified' or 'standard'
+    req.verificationId = decoded.verificationId || null;
+    
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Invalid or expired token' });

@@ -229,12 +229,49 @@ exports.verifyEmail = async (req, res) => {
 // Get Current User
 exports.getCurrentUser = async (req, res) => {
   try {
-    // User ID comes from authMiddleware
+    // User ID comes from authMiddleware - can be Supabase ID or OTP email
     const userId = req.userId;
+    const userEmail = req.userEmail;
+    const tokenType = req.tokenType;
+    const verificationId = req.verificationId;
 
+    // Handle OTP verification token (email_verified type)
+    if (tokenType === 'email_verified' && userEmail && !userId) {
+      const { data: verification, error: verifyError } = await supabaseAdmin
+        .from('email_verifications')
+        .select('*')
+        .eq('email', userEmail)
+        .eq('verified', true)
+        .single();
+
+      if (verifyError || !verification) {
+        return res.status(404).json({
+          success: false,
+          error: 'Email verification record not found'
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        user: {
+          type: 'otp_verified',
+          email: userEmail,
+          verificationId: verificationId,
+          verifiedAt: verification.verified_at,
+          campaignId: verification.campaign_id,
+          status: 'email_verified',
+          message: 'User authenticated via OTP verification'
+        }
+      });
+      return;
+    }
+
+    // Handle Supabase JWT token (standard type)
     if (!userId) {
       return res.status(401).json({
-        error: 'No authenticated user found'
+        success: false,
+        error: 'No authenticated user found',
+        tokenType: tokenType
       });
     }
 
