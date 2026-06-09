@@ -239,12 +239,23 @@ exports.getCurrentUser = async (req, res) => {
     if (tokenType === 'email_verified' && userEmail && !userId) {
       // Token already proves email verification, no need to query DB
       
-      // Fetch full candidate registration data if exists
+      // Fetch full candidate registration data from candidates table
       const { data: candidateData, error: candidateError } = await supabaseAdmin
-        .from('candidate_registrations')
+        .from('candidates')
         .select('*')
         .eq('email', userEmail)
         .single();
+
+      // If no candidate in candidates table, try candidate_registrations
+      let registrationData = candidateData;
+      if (!candidateData && !candidateError) {
+        const { data: regData } = await supabaseAdmin
+          .from('candidate_registrations')
+          .select('*')
+          .eq('email', userEmail)
+          .single();
+        registrationData = regData;
+      }
 
       res.status(200).json({
         success: true,
@@ -255,18 +266,31 @@ exports.getCurrentUser = async (req, res) => {
           status: 'email_verified',
           message: 'User authenticated via OTP verification - email confirmed',
           // Include full candidate data if registration exists
-          ...(candidateData && {
-            registration: {
-              id: candidateData.id,
-              phone: candidateData.phone,
-              first_name: candidateData.first_name,
-              last_name: candidateData.last_name,
-              resume_url: candidateData.resume_url,
-              campaign_id: candidateData.campaign_id,
-              status: candidateData.status,
-              email_verified: candidateData.email_verified,
-              created_at: candidateData.created_at,
-              updated_at: candidateData.updated_at
+          ...(registrationData && {
+            profile: {
+              id: registrationData.id,
+              first_name: registrationData.first_name,
+              last_name: registrationData.last_name,
+              phone: registrationData.phone_number || registrationData.phone,
+              gender: registrationData.gender,
+              date_of_birth: registrationData.date_of_birth,
+              city: registrationData.city,
+              province: registrationData.province,
+              postal_code: registrationData.postal_code,
+              resume_url: registrationData.resume_url,
+              campaign_id: registrationData.campaign_id,
+              status: registrationData.status || registrationData.verification_status,
+              email_verified: registrationData.email_verified || true,
+              available_from: registrationData.available_from,
+              permit_status: registrationData.permit_status,
+              shift_preference: registrationData.shift_preference,
+              license_required: registrationData.license_required,
+              license_expiry_month: registrationData.license_expiry_month,
+              license_expiry_year: registrationData.license_expiry_year,
+              job_category_id: registrationData.job_category_id,
+              job_industry_id: registrationData.job_industry_id,
+              created_at: registrationData.created_at,
+              updated_at: registrationData.updated_at
             }
           })
         }
