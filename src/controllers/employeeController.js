@@ -213,8 +213,13 @@ exports.updateEmployee = async (req, res) => {
   try {
     const id = req.params.id;
     
-    // Validate UUID format (basic check)
-    if (!id || typeof id !== 'string' || id.length < 5) {
+    // Validate ID format - allow 'self' or UUID (36 chars with dashes)
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ error: 'Invalid employee ID format' });
+    }
+    
+    // Allow 'self' or UUID-like strings (at least 4 chars)
+    if (id !== 'self' && id.length < 10) {
       return res.status(400).json({ error: 'Invalid employee ID format' });
     }
 
