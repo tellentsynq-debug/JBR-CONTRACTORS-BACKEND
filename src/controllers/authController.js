@@ -237,24 +237,22 @@ exports.getCurrentUser = async (req, res) => {
 
     // Handle OTP verification token (email_verified type)
     if (tokenType === 'email_verified' && userEmail && !userId) {
-      // Token already proves email verification, no need to query DB
+      // Token already proves email verification
       
       // Fetch full candidate registration data from candidates table
       const { data: candidateData, error: candidateError } = await supabaseAdmin
         .from('candidates')
         .select('*')
-        .eq('email', userEmail)
-        .single();
+        .eq('email', userEmail);
 
-      // If no candidate in candidates table, try candidate_registrations
-      let registrationData = candidateData;
-      if (!candidateData && !candidateError) {
-        const { data: regData } = await supabaseAdmin
-          .from('candidate_registrations')
-          .select('*')
-          .eq('email', userEmail)
-          .single();
-        registrationData = regData;
+      const registrationData = candidateData && candidateData.length > 0 ? candidateData[0] : null;
+
+      // Log for debugging
+      if (candidateError) {
+        console.error('Candidate fetch error:', candidateError);
+      }
+      if (!registrationData) {
+        console.log('No candidate data found for email:', userEmail);
       }
 
       res.status(200).json({
