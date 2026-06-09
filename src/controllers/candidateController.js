@@ -1,9 +1,28 @@
 const { v4: uuidv4 } = require('uuid');
+const jwt = require('jsonwebtoken');
 const supabaseModule = require('../config/database');
 const supabase = supabaseModule;
 const supabaseAdmin = supabaseModule.admin;
 const { sendOTPEmail, sendVerificationConfirmationEmail } = require('../services/emailService');
 const securityMiddleware = require('../middleware/securityMiddleware');
+
+// Generate JWT token
+const generateJWT = (email, verificationId) => {
+  const payload = {
+    email: email,
+    verificationId: verificationId,
+    type: 'email_verified',
+    iat: Math.floor(Date.now() / 1000)
+  };
+  
+  const token = jwt.sign(
+    payload,
+    process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+    { expiresIn: '24h' }
+  );
+  
+  return token;
+};
 
 // Generate 6-digit OTP
 const generateOTP = () => {
@@ -325,6 +344,9 @@ exports.verifyOTP = async (req, res) => {
     // Send confirmation email
     await sendVerificationConfirmationEmail(email);
 
+    // Generate JWT token for authenticated registration
+    const jwtToken = generateJWT(email, verification.id);
+
     // Log successful verification
     await securityMiddleware.logRegistrationAttempt(supabaseAdmin, clientIP, email, 'verify_otp', true);
 
@@ -334,7 +356,9 @@ exports.verifyOTP = async (req, res) => {
       email: email,
       verified: true,
       redirectUrl: '/candidate/register',
-      verificationToken: verification.id // For next step
+      jwtToken: jwtToken,
+      expiresIn: 86400, // 24 hours in seconds
+      tokenType: 'Bearer'
     });
 
   } catch (error) {
