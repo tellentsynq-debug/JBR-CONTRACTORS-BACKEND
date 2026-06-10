@@ -818,41 +818,102 @@ exports.updateUser = async (req, res) => {
     }
     
     console.log(`[DEBUG] Applying updates:`, updates);
+    console.log(`[DEBUG] Update attempt - has role change: ${updates.role ? 'yes' : 'no'}`);
     
-    // Update profile using admin client
-    const { error: updateError, data: updateData } = await supabaseAdmin
-      .from('profiles')
-      .update(updates)
-      .eq('id', id)
-      .select();
+    // Separate role updates from other updates
+    // This helps us handle trigger restrictions more gracefully
+    const roleUpdate = updates.role ? { role: updates.role } : null;
+    const otherUpdates = { ...updates };
+    delete otherUpdates.role;
     
-    if (updateError) {
-      console.error('Profile update error:', updateError);
-      console.error('Update error details:', {
-        code: updateError.code,
-        message: updateError.message,
-        details: updateError.details,
-        hint: updateError.hint
-      });
+    let updateResult = null;
+    let roleUpdateSuccess = false;
+    let roleUpdateError = null;
+    
+    // First, try to apply non-role updates
+    if (Object.keys(otherUpdates).length > 0) {
+      console.log(`[DEBUG] Applying non-role updates:`, otherUpdates);
+      const { error: nonRoleError, data: nonRoleData } = await supabaseAdmin
+        .from('profiles')
+        .update(otherUpdates)
+        .eq('id', id)
+        .select();
       
-      // Check if it's an RLS policy error
-      if (updateError.code === 'PGRST301' || updateError.message?.includes('policy')) {
-        return res.status(403).json({ 
-          error: 'Forbidden: You do not have permission to update this user',
-          details: 'RLS policy denied the update',
-          code: updateError.code
+      if (nonRoleError) {
+        console.error('Non-role update error:', nonRoleError);
+        return res.status(500).json({ 
+          error: 'Failed to update user profile fields',
+          details: nonRoleError.message,
+          code: nonRoleError.code
+        });
+      }
+      updateResult = nonRoleData;
+      console.log(`✓ Non-role fields updated`);
+    }
+    
+    // Then, try to apply role update if needed
+    if (roleUpdate) {
+      console.log(`[DEBUG] Attempting role update to: ${roleUpdate.role}`);
+      const { error: roleError, data: roleData } = await supabaseAdmin
+        .from('profiles')
+        .update(roleUpdate)
+        .eq('id', id)
+        .select();
+      
+      if (roleError) {
+        console.error('Role update error:', roleError);
+        console.error('Role update error details:', {
+          code: roleError.code,
+          message: roleError.message,
+          details: roleError.details,
+          hint: roleError.hint
+        });
+        roleUpdateError = roleError;
+        
+        // Check if it's the "Only admins can change roles" trigger error
+        if (roleError.message?.includes('admin') || roleError.message?.includes('role')) {
+          console.warn(`[WARN] Database trigger rejected role change`);
+          console.warn(`[WARN] Trigger message: ${roleError.message}`);
+          console.warn(`[INFO] This is likely a database trigger enforcing role restrictions`);
+          
+          // If other updates succeeded, return partial success
+          if (Object.keys(otherUpdates).length > 0) {
+            console.log(`[INFO] Other user fields were updated successfully`);
+            return res.status(207).json({ 
+              message: 'User partially updated - role change was rejected by database',
+              partialSuccess: true,
+              failed: 'role',
+              error: roleError.message,
+              hint: 'Check database trigger: prevent_unauthorized_role_change',
+              user: updateResult?.[0] || existingUser
+            });
+          }
+          
+          // If only role update was requested
+          return res.status(403).json({ 
+            error: 'Failed to update user role',
+            details: roleError.message,
+            hint: 'Database trigger "prevent_unauthorized_role_change" is preventing this operation',
+            requiredRole: 'super_admin',
+            yourRole: requestingUser?.role,
+            code: roleError.code
+          });
+        }
+        
+        return res.status(500).json({ 
+          error: 'Failed to update user role',
+          details: roleError.message,
+          code: roleError.code
         });
       }
       
-      return res.status(500).json({ 
-        error: 'Failed to update user profile',
-        details: updateError.message,
-        code: updateError.code
-      });
+      updateResult = roleData;
+      roleUpdateSuccess = true;
+      console.log(`✓ Role updated to: ${roleUpdate.role}`);
     }
     
-    // Fetch updated user
-    console.log(`[DEBUG] Fetching updated user data`);
+    // Fetch final updated user
+    console.log(`[DEBUG] Fetching final user data`);
     const { data: updatedUser, error: fetchError } = await supabase
       .from('profiles')
       .select('id, email, first_name, last_name, role, is_active, last_login, created_at')
