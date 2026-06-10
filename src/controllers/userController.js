@@ -651,7 +651,7 @@ exports.createUser = async (req, res) => {
     if (existingProfile) {
       console.log(`[INFO] Profile already exists for ${userId}, updating instead of creating`);
       
-      // Build update object - exclude role unless user is admin and requesting a role change
+      // Build update object
       const updateObj = {
         first_name: firstName,
         last_name: lastName,
@@ -659,11 +659,9 @@ exports.createUser = async (req, res) => {
         is_active: isActive
       };
       
-      // Note: For admin users, role is set via is_admin metadata, NOT in database due to trigger restrictions
-      // Only include role if requesting user is admin AND role is being set to something other than default/admin
-      if (isRequestingUserAdmin && role !== 'user' && role !== 'admin') {
-        updateObj.role = role;
-      }
+      // Note: For admin users, role is stored via is_admin metadata flag, NOT in database
+      // This avoids database trigger restrictions
+      // Database role stays as 'user' for all users
       
       // Update existing profile with provided data
       const { data: updatedProfile, error: updateError } = await supabaseAdmin
@@ -702,7 +700,7 @@ exports.createUser = async (req, res) => {
     // Profile doesn't exist, create it
     console.log(`[DEBUG] Creating new profile for user ID: ${userId}`);
     
-    // Build insert object - exclude role unless user is admin and requesting a role change
+    // Build insert object
     const insertObj = {
       id: userId,
       email,
@@ -710,14 +708,9 @@ exports.createUser = async (req, res) => {
       last_name: lastName,
       phone_number: phoneNumber || null,
       is_active: isActive,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      role: 'user' // Always store as 'user' in database, admin status is in is_admin metadata
     };
-    
-    // Note: For admin users, role is set via is_admin metadata, NOT in database due to trigger restrictions
-    // Only include role if requesting user is admin AND role is being set to something other than default/admin
-    if (isRequestingUserAdmin && role !== 'user' && role !== 'admin') {
-      insertObj.role = role;
-    }
     
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from('profiles')
@@ -805,7 +798,7 @@ exports.updateUser = async (req, res) => {
     
     // Check if user exists
     console.log(`[DEBUG] Fetching user: ${id}`);
-    const { data: existingUser, error: checkError } = await supabase
+    const { data: existingUser, error: checkError } = await supabaseAdmin
       .from('profiles')
       .select('id, role, first_name, last_name, email, is_active')
       .eq('id', id)
@@ -831,7 +824,7 @@ exports.updateUser = async (req, res) => {
       
       // Fetch requesting user's role
       console.log(`[DEBUG] Fetching requesting user role: ${requestingUserId}`);
-      const { data: requestingUser, error: reqUserError } = await supabase
+      const { data: requestingUser, error: reqUserError } = await supabaseAdmin
         .from('profiles')
         .select('role, first_name, last_name')
         .eq('id', requestingUserId)
@@ -847,9 +840,16 @@ exports.updateUser = async (req, res) => {
       
       console.log(`[DEBUG] Requesting user role from DB: ${requestingUser?.role}`);
       
-      // Check if requesting user is admin (from DB or auth metadata)
+      // Check if requesting user is admin (from JWT metadata first, then from auth API)
       let isRequesterAdmin = requestingUser?.role === 'admin';
       
+      // Check JWT metadata directly from the decoded token (set by authMiddleware)
+      if (!isRequesterAdmin && req.user?.user_metadata?.is_admin === true) {
+        isRequesterAdmin = true;
+        console.log(`[INFO] Requester has is_admin flag in JWT metadata`);
+      }
+      
+      // If still not found, try to fetch from auth API
       if (!isRequesterAdmin) {
         try {
           const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(requestingUserId);
@@ -938,6 +938,39 @@ exports.updateUser = async (req, res) => {
     // Then, try to apply role update if needed
     if (roleUpdate) {
       console.log(`[DEBUG] Attempting role update to: ${roleUpdate.role}`);
+      
+      // For admin role, update is_admin metadata in auth.users instead of database role
+      if (roleUpdate.role === 'admin') {
+        console.log(`[DEBUG] Setting is_admin=true in auth metadata for user ${id}`);
+        const { error: metadataError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+          user_metadata: {
+            is_admin: true
+          }
+        });
+        
+        if (metadataError) {
+          console.error('Failed to set is_admin metadata:', metadataError);
+          return res.status(500).json({
+            error: 'Failed to set admin metadata',
+            details: metadataError.message
+          });
+        }
+        
+        console.log(`✓ is_admin metadata set to true for user ${id}`);
+        roleUpdateSuccess = true;
+        
+        // Return updated user with role shown as admin (from metadata)
+        return res.status(200).json({
+          message: 'User role updated successfully',
+          user: {
+            ...existingUser,
+            role: 'admin',
+            is_admin: true
+          }
+        });
+      }
+      
+      // For non-admin roles, try to update database role
       const { error: roleError, data: roleData } = await supabaseAdmin
         .from('profiles')
         .update(roleUpdate)
