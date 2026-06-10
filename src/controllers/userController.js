@@ -721,64 +721,150 @@ exports.updateUser = async (req, res) => {
     const { firstName, lastName, email, phoneNumber, role, isActive } = req.body;
     const requestingUserId = req.userId;
     
+    console.log(`[DEBUG] Update request:`, { id, firstName, lastName, email, phoneNumber, role, isActive, requestingUserId });
+    
     // Validate UUID format
     if (!isValidUUID(id)) {
       return res.status(400).json({ error: 'Invalid user ID format - must be a valid UUID' });
     }
     
     // Check if user exists
+    console.log(`[DEBUG] Fetching user: ${id}`);
     const { data: existingUser, error: checkError } = await supabase
       .from('profiles')
-      .select('id, role')
+      .select('id, role, first_name, last_name, email, is_active')
       .eq('id', id)
       .single();
     
     if (checkError || !existingUser) {
+      console.warn(`User not found: ${id}`, checkError);
       return res.status(404).json({ error: 'User not found' });
     }
     
+    console.log(`[DEBUG] Existing user:`, existingUser);
+    
     // Build update object
     const updates = {};
-    if (firstName) updates.first_name = firstName;
-    if (lastName) updates.last_name = lastName;
+    if (firstName !== undefined) updates.first_name = firstName;
+    if (lastName !== undefined) updates.last_name = lastName;
     if (phoneNumber !== undefined) updates.phone_number = phoneNumber;
     if (isActive !== undefined) updates.is_active = isActive;
     
-    // Handle role change - only super_admin can change roles
-    if (role && role !== existingUser.role) {
-      if (role === 'admin' || role === 'super_admin') {
-        // Only super_admin can promote to admin/super_admin
-        const { data: requestingUser } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', requestingUserId)
-          .single();
-        
-        if (requestingUser?.role !== 'super_admin') {
-          return res.status(403).json({ 
-            error: 'Unauthorized: Only super admins can grant admin roles' 
-          });
-        }
+    // Handle role change - check permissions
+    if (role !== undefined && role !== existingUser.role) {
+      console.log(`[DEBUG] Role change requested: ${existingUser.role} → ${role}`);
+      
+      // Fetch requesting user's role
+      console.log(`[DEBUG] Fetching requesting user role: ${requestingUserId}`);
+      const { data: requestingUser, error: reqUserError } = await supabase
+        .from('profiles')
+        .select('role, first_name, last_name')
+        .eq('id', requestingUserId)
+        .single();
+      
+      if (reqUserError) {
+        console.error(`[ERROR] Failed to fetch requesting user:`, reqUserError);
+        return res.status(400).json({ 
+          error: 'Invalid requesting user',
+          details: 'Could not verify your admin role' 
+        });
       }
+      
+      console.log(`[DEBUG] Requesting user role: ${requestingUser?.role}`);
+      
+      // Check permission based on target role
+      const isTargetAdminRole = role === 'admin' || role === 'super_admin';
+      const isRequesterSuperAdmin = requestingUser?.role === 'super_admin';
+      const isRequesterAdmin = requestingUser?.role === 'admin';
+      
+      console.log(`[DEBUG] Permission check:`, {
+        isTargetAdminRole,
+        isRequesterSuperAdmin,
+        isRequesterAdmin,
+        currentUserRole: requestingUser?.role
+      });
+      
+      // Only super_admin can grant/revoke admin roles
+      if (isTargetAdminRole && !isRequesterSuperAdmin) {
+        console.warn(`[WARN] Admin role change denied - requesting user is ${requestingUser?.role}, not super_admin`);
+        return res.status(403).json({ 
+          error: 'Unauthorized: Only super admins can change admin roles',
+          requiredRole: 'super_admin',
+          yourRole: requestingUser?.role
+        });
+      }
+      
+      // Regular admins can change regular user roles
+      if (!isTargetAdminRole && !isRequesterAdmin && !isRequesterSuperAdmin) {
+        console.warn(`[WARN] User role change denied - requesting user is ${requestingUser?.role}`);
+        return res.status(403).json({ 
+          error: 'Unauthorized: Only admins or higher can change user roles',
+          requiredRole: 'admin',
+          yourRole: requestingUser?.role
+        });
+      }
+      
       updates.role = role;
+      console.log(`[DEBUG] Role change approved, updating to: ${role}`);
     }
     
-    // Update profile
-    const { error: updateError } = await supabaseAdmin
+    // If no updates, return current user
+    if (Object.keys(updates).length === 0) {
+      console.log(`[DEBUG] No updates to apply`);
+      return res.json({
+        message: 'User unchanged - no fields provided to update',
+        user: existingUser
+      });
+    }
+    
+    console.log(`[DEBUG] Applying updates:`, updates);
+    
+    // Update profile using admin client
+    const { error: updateError, data: updateData } = await supabaseAdmin
       .from('profiles')
       .update(updates)
-      .eq('id', id);
+      .eq('id', id)
+      .select();
     
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('Profile update error:', updateError);
+      console.error('Update error details:', {
+        code: updateError.code,
+        message: updateError.message,
+        details: updateError.details,
+        hint: updateError.hint
+      });
+      
+      // Check if it's an RLS policy error
+      if (updateError.code === 'PGRST301' || updateError.message?.includes('policy')) {
+        return res.status(403).json({ 
+          error: 'Forbidden: You do not have permission to update this user',
+          details: 'RLS policy denied the update',
+          code: updateError.code
+        });
+      }
+      
+      return res.status(500).json({ 
+        error: 'Failed to update user profile',
+        details: updateError.message,
+        code: updateError.code
+      });
+    }
     
     // Fetch updated user
+    console.log(`[DEBUG] Fetching updated user data`);
     const { data: updatedUser, error: fetchError } = await supabase
       .from('profiles')
       .select('id, email, first_name, last_name, role, is_active, last_login, created_at')
       .eq('id', id)
       .single();
     
-    if (fetchError) throw fetchError;
+    if (fetchError) {
+      console.error('Failed to fetch updated user:', fetchError);
+      throw fetchError;
+    }
+    
+    console.log(`✓ User updated successfully:`, updatedUser);
     
     res.json({
       message: 'User updated successfully',
@@ -795,7 +881,10 @@ exports.updateUser = async (req, res) => {
     });
   } catch (error) {
     console.error('Update user error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message || 'Failed to update user',
+      details: error.details || null
+    });
   }
 };
 
