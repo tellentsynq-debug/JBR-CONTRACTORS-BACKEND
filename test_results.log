@@ -1,0 +1,30 @@
+==========================================
+Admin Role Assignment Test
+==========================================
+
+[Step 1] Creating admin user...
+Response: {"success":true,"message":"Admin account created successfully","admin":{"id":"092d446b-c867-4009-847d-d72b4526e09c","email":"admin.test.1781113941@jbrstaffingsolutions.com","first_name":"Test","last_name":"Admin","role":"admin","is_active":true,"created_at":"2026-06-10T17:52:23.758Z"}}
+✓ Admin created with ID: 092d446b-c867-4009-847d-d72b4526e09c
+
+[Step 2] Logging in as admin...
+Response: {"success":true,"user":{"id":"092d446b-c867-4009-847d-d72b4526e09c","email":"admin.test.1781113941@jbrstaffingsolutions.com","role":"admin","user_metadata":{"email_verified":true,"first_name":"Test","is_admin":true,"last_name":"Admin"}},"session":{"access_token":"eyJhbGciOiJIUzI1NiIsImtpZCI6IldlMnVYenJPZ2ZLRnBFK1QiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3Z3Y2xtYnlqa2Vta2l1bXF6YnhtLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIwOTJkNDQ2Yi1jODY3LTQwMDktODQ3ZC1kNzJiNDUyNmUwOWMiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgxMTE3NTQ1LCJpYXQiOjE3ODExMTM5NDUsImVtYWlsIjoiYWRtaW4udGVzdC4xNzgxMTEzOTQxQGpicnN0YWZmaW5nc29sdXRpb25zLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWxfdmVyaWZpZWQiOnRydWUsImZpcnN0X25hbWUiOiJUZXN0IiwiaXNfYWRtaW4iOnRydWUsImxhc3RfbmFtZSI6IkFkbWluIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3ODExMTM5NDV9XSwic2Vzc2lvbl9pZCI6IjRmMWJkODk3LTcyZDctNDU5ZS1iMzE0LTAwODVkMzg0NGNmOSIsImlzX2Fub255bW91cyI6ZmFsc2V9.kB62pgGKpRGR6wKzoeLCoao6X5QI7iRzwlP4LlcAkbI","refresh_token":"yts5dmrksny6","expires_in":3600,"token_type":"bearer"},"message":"Sign in successful"}
+✓ Admin logged in with token: eyJhbGciOiJIUzI1NiIs...
+✓ Admin role in response: admin
+
+[Step 3] Creating regular user with admin token...
+Response: {"message":"User created successfully","note":"Profile was auto-created by system, updated with provided data","user":{"id":"88b469cd-b1a0-4896-a1f4-faea6e24b503","first_name":"Regular","last_name":"User","email":"user.test.1781113941@jbrstaffingsolutions.com","phone_number":"+1234567890","role":"user","is_active":true,"temp_password":"0np8sr9mTemp!123","note_password":"Share temporary password with user - they should change it on first login"}}
+✓ Regular user created with ID: 88b469cd-b1a0-4896-a1f4-faea6e24b503
+
+[Step 4] Creating user with 'admin' role (using admin token) - should SUCCEED...
+Response: {"success":false,"error":"Failed to create user with role","details":"Only admins can assign roles to users"}
+✗ FAILED: Admin could not create user with admin role
+Error details: "details":"Only admins can assign roles to users
+
+[Step 5] Logging in as regular user...
+Response: {"error":"Invalid login credentials"}
+Note: Regular user token not found. User may need to set password first.
+Skipping regular user role creation test.
+
+==========================================
+Test Complete!
+==========================================

@@ -509,14 +509,38 @@ exports.createUser = async (req, res) => {
       });
     }
     
+    // Check if requesting user is admin (check database role, JWT metadata, or auth metadata)
+    let isRequestingUserAdmin = requestingUserProfile.role === 'admin';
+    
+    // If not admin in database, check JWT metadata (from authMiddleware)
+    if (!isRequestingUserAdmin && req.user?.user_metadata?.is_admin === true) {
+      isRequestingUserAdmin = true;
+      console.log(`[INFO] User ${requestingUserId} has is_admin flag in JWT metadata`);
+    }
+    
+    // If still not found, try to fetch from auth API
+    if (!isRequestingUserAdmin) {
+      try {
+        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(requestingUserId);
+        if (!authError && authUser?.user_metadata?.is_admin === true) {
+          isRequestingUserAdmin = true;
+          console.log(`[INFO] User ${requestingUserId} has is_admin flag in auth metadata`);
+        }
+      } catch (err) {
+        console.log(`[DEBUG] Could not fetch auth metadata for permission check:`, err.message);
+      }
+    }
+    
+    console.log(`[DEBUG] Admin check result for user ${requestingUserId}: isAdmin=${isRequestingUserAdmin}, dbRole=${requestingUserProfile.role}, jwtIsAdmin=${req.user?.user_metadata?.is_admin}`);
+    
     // If a non-default role is requested, check if requesting user is admin
     if (role && role !== 'user') {
       // Check if requesting user is admin
-      if (!['admin'].includes(requestingUserProfile.role)) {
+      if (!isRequestingUserAdmin) {
         return res.status(403).json({
           success: false,
-          error: 'Failed to update user profile',
-          details: 'Only admins can change roles'
+          error: 'Failed to create user with role',
+          details: 'Only admins can assign roles to users'
         });
       }
     }
@@ -544,16 +568,25 @@ exports.createUser = async (req, res) => {
     console.log(`[DEBUG] Creating auth user for email: ${email}`);
     console.log(`[DEBUG] Request body:`, { firstName, lastName, email, role, isActive });
     
+    // Prepare user metadata
+    const userMetadata = {
+      first_name: firstName,
+      last_name: lastName,
+      created_by: requestingUserId
+    };
+    
+    // If role is admin, set is_admin flag in metadata (database role will be 'user' due to trigger restrictions)
+    if (role === 'admin') {
+      userMetadata.is_admin = true;
+      console.log(`[DEBUG] Setting is_admin=true in user metadata for new admin user`);
+    }
+    
     // Create user in auth.users using service role
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: tempPassword,
       email_confirm: true,
-      user_metadata: {
-        first_name: firstName,
-        last_name: lastName,
-        created_by: requestingUserId
-      }
+      user_metadata: userMetadata
     });
     
     console.log(`[DEBUG] Auth response:`, { authUser, authError });
@@ -626,8 +659,9 @@ exports.createUser = async (req, res) => {
         is_active: isActive
       };
       
-      // Only include role if requesting user is admin AND role is being set to something other than default
-      if (['admin'].includes(requestingUserProfile?.role) && role !== 'user') {
+      // Note: For admin users, role is set via is_admin metadata, NOT in database due to trigger restrictions
+      // Only include role if requesting user is admin AND role is being set to something other than default/admin
+      if (isRequestingUserAdmin && role !== 'user' && role !== 'admin') {
         updateObj.role = role;
       }
       
@@ -679,8 +713,9 @@ exports.createUser = async (req, res) => {
       created_at: new Date().toISOString()
     };
     
-    // Only include role if requesting user is admin AND role is being set to something other than default
-    if (['admin'].includes(requestingUserProfile?.role) && role !== 'user') {
+    // Note: For admin users, role is set via is_admin metadata, NOT in database due to trigger restrictions
+    // Only include role if requesting user is admin AND role is being set to something other than default/admin
+    if (isRequestingUserAdmin && role !== 'user' && role !== 'admin') {
       insertObj.role = role;
     }
     
@@ -810,21 +845,32 @@ exports.updateUser = async (req, res) => {
         });
       }
       
-      console.log(`[DEBUG] Requesting user role: ${requestingUser?.role}`);
+      console.log(`[DEBUG] Requesting user role from DB: ${requestingUser?.role}`);
       
-      // Check permission based on target role
-      const isTargetAdminRole = role === 'admin';
-      const isRequesterAdmin = requestingUser?.role === 'admin';
+      // Check if requesting user is admin (from DB or auth metadata)
+      let isRequesterAdmin = requestingUser?.role === 'admin';
+      
+      if (!isRequesterAdmin) {
+        try {
+          const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(requestingUserId);
+          if (!authError && authUser?.user_metadata?.is_admin === true) {
+            isRequesterAdmin = true;
+            console.log(`[INFO] Requester has is_admin flag in auth metadata`);
+          }
+        } catch (err) {
+          console.log(`[DEBUG] Could not fetch auth metadata:`, err.message);
+        }
+      }
       
       console.log(`[DEBUG] Permission check:`, {
-        isTargetAdminRole,
+        isTargetAdminRole: role === 'admin',
         isRequesterAdmin,
         currentUserRole: requestingUser?.role
       });
       
       // Only admin can grant/revoke admin roles
-      if (isTargetAdminRole && !isRequesterAdmin) {
-        console.warn(`[WARN] Admin role change denied - requesting user is ${requestingUser?.role}, not admin`);
+      if (role === 'admin' && !isRequesterAdmin) {
+        console.warn(`[WARN] Admin role change denied - requesting user is not admin`);
         return res.status(403).json({ 
           error: 'Unauthorized: Only admins can change admin roles',
           requiredRole: 'admin',
@@ -833,8 +879,8 @@ exports.updateUser = async (req, res) => {
       }
       
       // Admins can change user roles
-      if (!isTargetAdminRole && !isRequesterAdmin) {
-        console.warn(`[WARN] User role change denied - requesting user is ${requestingUser?.role}`);
+      if (role !== 'admin' && !isRequesterAdmin) {
+        console.warn(`[WARN] User role change denied - requesting user is not admin`);
         return res.status(403).json({ 
           error: 'Unauthorized: Only admins can change user roles',
           requiredRole: 'admin',
