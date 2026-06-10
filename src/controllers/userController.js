@@ -3,7 +3,12 @@ const supabaseAdmin = supabase.admin;
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
-const { v4: uuidv4 } = require('uuid');
+const { v4: uuidv4, validate: validateUUID } = require('uuid');
+
+// UUID validation utility
+const isValidUUID = (uuid) => {
+  return validateUUID(uuid);
+};
 
 // Generate OTP and send SMS
 const sendOTP = async (phoneNumber) => {
@@ -412,6 +417,12 @@ exports.getAllUsers = async (req, res) => {
 exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Validate UUID format
+    if (!isValidUUID(id)) {
+      return res.status(400).json({ error: 'Invalid user ID format - must be a valid UUID' });
+    }
+    
     const { data: user, error } = await supabase
       .from('profiles')
       .select('id, email, first_name, last_name, role, is_active, last_login, created_at')
@@ -547,6 +558,11 @@ exports.updateUser = async (req, res) => {
     const { firstName, lastName, email, phoneNumber, role, isActive } = req.body;
     const requestingUserId = req.userId;
     
+    // Validate UUID format
+    if (!isValidUUID(id)) {
+      return res.status(400).json({ error: 'Invalid user ID format - must be a valid UUID' });
+    }
+    
     // Check if user exists
     const { data: existingUser, error: checkError } = await supabase
       .from('profiles')
@@ -625,6 +641,11 @@ exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.userId;
+    
+    // Validate UUID format
+    if (!isValidUUID(id)) {
+      return res.status(400).json({ error: 'Invalid user ID format - must be a valid UUID' });
+    }
     
     // Check if user exists
     const { data: userToDelete, error: checkError } = await supabase
