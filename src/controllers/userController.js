@@ -380,17 +380,30 @@ exports.login = async (req, res) => {
 };
 
 
-// Get all users
+// Get all users (Admin only)
 exports.getAllUsers = async (req, res) => {
   try {
     const { data: users, error } = await supabase
       .from('profiles')
-      .select('*');
+      .select('id, email, first_name, last_name, role, is_active, last_login, created_at');
 
     if (error) throw error;
-    res.json(users);
+    
+    // Format response
+    const formattedUsers = users.map(u => ({
+      id: u.id,
+      first_name: u.first_name,
+      last_name: u.last_name,
+      email: u.email,
+      role: u.role || 'user',
+      is_active: u.is_active,
+      last_login: u.last_login,
+      created_at: u.created_at
+    }));
+    
+    res.json(formattedUsers);
   } catch (error) {
-    console.error(error);
+    console.error('Error fetching users:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -401,7 +414,7 @@ exports.getUserById = async (req, res) => {
     const { id } = req.params;
     const { data: user, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select('id, email, first_name, last_name, role, is_active, last_login, created_at')
       .eq('id', id)
       .single();
 
@@ -410,43 +423,119 @@ exports.getUserById = async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json(user);
+    
+    res.json({
+      id: user.id,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      email: user.email,
+      role: user.role || 'user',
+      is_active: user.is_active,
+      last_login: user.last_login,
+      created_at: user.created_at
+    });
   } catch (error) {
-    console.error(error);
+    console.error('Error fetching user:', error);
     res.status(500).json({ error: error.message });
   }
 };
 
-// Create user
+// Create user (Admin only - creates auth user + profile)
 exports.createUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, phoneNumber } = req.body;
+    const { firstName, lastName, email, phoneNumber, role = 'user', isActive = true } = req.body;
+    const requestingUserId = req.userId; // From JWT middleware
     
-    if (!firstName || !lastName) {
-      return res.status(400).json({ error: 'First name and last name are required' });
+    // Validation
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({ 
+        error: 'First name, last name, and email are required' 
+      });
     }
     
-    const { data: user, error } = await supabase
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    
+    // Check if email already exists
+    const { data: existingUser } = await supabase
       .from('profiles')
-      .insert([{ 
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    
+    // Generate a temporary password for the user
+    const tempPassword = Math.random().toString(36).slice(-8) + 'Temp!123';
+    
+    // Create user in auth.users using service role
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: {
         first_name: firstName,
         last_name: lastName,
-        email: email,
-        phone_number: phoneNumber
+        created_by: requestingUserId
+      }
+    });
+    
+    if (authError) {
+      console.error('Auth creation error:', authError);
+      return res.status(500).json({ 
+        error: 'Failed to create user in auth',
+        details: authError.message 
+      });
+    }
+    
+    const userId = authUser.id;
+    
+    // Create profile record
+    const { data: profileData, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .insert([{
+        id: userId,
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        phone_number: phoneNumber || null,
+        role: role,
+        is_active: isActive,
+        created_at: new Date().toISOString()
       }])
-      .select('id');
-
-    if (error) throw error;
+      .select();
+    
+    if (profileError) {
+      console.error('Profile creation error:', profileError);
+      // Delete the auth user if profile creation fails
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return res.status(500).json({ 
+        error: 'Failed to create user profile',
+        details: profileError.message 
+      });
+    }
     
     res.status(201).json({ 
-      id: user[0].id, 
-      firstName, 
-      lastName, 
-      email,
-      phoneNumber 
+      message: 'User created successfully',
+      user: {
+        id: userId,
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        phone_number: phoneNumber,
+        role,
+        is_active: isActive,
+        temp_password: tempPassword,
+        note: 'Share temporary password with user - they should change it on first login'
+      }
     });
   } catch (error) {
-    console.error(error);
+    console.error('Create user error:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -455,41 +544,130 @@ exports.createUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { firstName, lastName, email, phoneNumber } = req.body;
+    const { firstName, lastName, email, phoneNumber, role, isActive } = req.body;
+    const requestingUserId = req.userId;
     
-    const { error } = await supabase
+    // Check if user exists
+    const { data: existingUser, error: checkError } = await supabase
       .from('profiles')
-      .update({
-        first_name: firstName,
-        last_name: lastName,
-        email: email,
-        phone_number: phoneNumber
-      })
-      .eq('id', id);
-
-    if (error) throw error;
+      .select('id, role')
+      .eq('id', id)
+      .single();
     
-    res.json({ id, firstName, lastName, email, phoneNumber });
+    if (checkError || !existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Build update object
+    const updates = {};
+    if (firstName) updates.first_name = firstName;
+    if (lastName) updates.last_name = lastName;
+    if (phoneNumber !== undefined) updates.phone_number = phoneNumber;
+    if (isActive !== undefined) updates.is_active = isActive;
+    
+    // Handle role change - only super_admin can change roles
+    if (role && role !== existingUser.role) {
+      if (role === 'admin' || role === 'super_admin') {
+        // Only super_admin can promote to admin/super_admin
+        const { data: requestingUser } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', requestingUserId)
+          .single();
+        
+        if (requestingUser?.role !== 'super_admin') {
+          return res.status(403).json({ 
+            error: 'Unauthorized: Only super admins can grant admin roles' 
+          });
+        }
+      }
+      updates.role = role;
+    }
+    
+    // Update profile
+    const { error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update(updates)
+      .eq('id', id);
+    
+    if (updateError) throw updateError;
+    
+    // Fetch updated user
+    const { data: updatedUser, error: fetchError } = await supabase
+      .from('profiles')
+      .select('id, email, first_name, last_name, role, is_active, last_login, created_at')
+      .eq('id', id)
+      .single();
+    
+    if (fetchError) throw fetchError;
+    
+    res.json({
+      message: 'User updated successfully',
+      user: {
+        id: updatedUser.id,
+        first_name: updatedUser.first_name,
+        last_name: updatedUser.last_name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        is_active: updatedUser.is_active,
+        last_login: updatedUser.last_login,
+        created_at: updatedUser.created_at
+      }
+    });
   } catch (error) {
-    console.error(error);
+    console.error('Update user error:', error);
     res.status(500).json({ error: error.message });
   }
 };
 
-// Delete user
+// Delete user (Admin only - deletes from auth.users + profiles via cascade)
 exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { data, error } = await supabase
+    const requestingUserId = req.userId;
+    
+    // Check if user exists
+    const { data: userToDelete, error: checkError } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .eq('id', id)
+      .single();
+    
+    if (checkError || !userToDelete) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Prevent self-deletion
+    if (id === requestingUserId) {
+      return res.status(403).json({ error: 'Cannot delete your own account' });
+    }
+    
+    // Delete from auth.users using service role (cascades to profiles via FK)
+    const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(id);
+    
+    if (deleteAuthError) {
+      console.error('Auth deletion error:', deleteAuthError);
+      return res.status(500).json({ 
+        error: 'Failed to delete user from auth',
+        details: deleteAuthError.message 
+      });
+    }
+    
+    // Also delete from profiles in case cascade didn't work
+    await supabaseAdmin
       .from('profiles')
       .delete()
       .eq('id', id);
-
-    if (error) throw error;
     
-    res.json({ message: 'User deleted successfully' });
+    res.json({ 
+      message: 'User deleted successfully',
+      deletedUser: {
+        id,
+        email: userToDelete.email
+      }
+    });
   } catch (error) {
-    console.error(error);
+    console.error('Delete user error:', error);
     res.status(500).json({ error: error.message });
   }
 };
