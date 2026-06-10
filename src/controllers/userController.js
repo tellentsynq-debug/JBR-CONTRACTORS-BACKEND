@@ -180,8 +180,14 @@ exports.signup = async (req, res) => {
             // Fall back to using the UUID we generated
             console.log('Falling back to UUID-based user creation');
           } else if (authUser?.id) {
-            userId = authUser.id; // Use the real user ID from auth
-            console.log(`✓ User created in auth.users with ID: ${userId}`);
+            // Validate UUID format
+            if (isValidUUID(authUser.id)) {
+              userId = authUser.id; // Use the real user ID from auth
+              console.log(`✓ User created in auth.users with ID: ${userId}`);
+            } else {
+              console.warn(`Invalid UUID returned from auth: ${authUser.id}, using generated UUID`);
+              // Continue with generated UUID
+            }
           }
         } catch (err) {
           console.warn('Error creating user in auth (will use UUID fallback):', err.message);
@@ -198,18 +204,18 @@ exports.signup = async (req, res) => {
       }
     } else if (signUpData?.user?.id) {
       authData = signUpData;
-      userId = signUpData.user.id;
-      console.log(`✓ Auth signup successful, user ID: ${userId}`);
+      // Validate UUID format
+      if (isValidUUID(signUpData.user.id)) {
+        userId = signUpData.user.id;
+        console.log(`✓ Auth signup successful, user ID: ${userId}`);
+      } else {
+        console.warn(`Invalid UUID returned from signup: ${signUpData.user.id}, using generated UUID`);
+        userId = uuidv4();
+      }
     } else {
       console.error('Unexpected signup response - no user ID:', signUpData);
-      return res.status(500).json({ 
-        error: 'Failed to create user',
-        errorDetails: {
-          message: 'No user ID returned from signup',
-          code: 'NO_USER_ID',
-          status: 500
-        }
-      });
+      console.log('Generating new UUID for user');
+      userId = uuidv4();
     }
 
     // Create user in public users table first (REQUIRED - foreign key constraint for user_roles)
@@ -510,6 +516,9 @@ exports.createUser = async (req, res) => {
     // Generate a temporary password for the user
     const tempPassword = Math.random().toString(36).slice(-8) + 'Temp!123';
     
+    console.log(`[DEBUG] Creating auth user for email: ${email}`);
+    console.log(`[DEBUG] Request body:`, { firstName, lastName, email, role, isActive });
+    
     // Create user in auth.users using service role
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -522,8 +531,11 @@ exports.createUser = async (req, res) => {
       }
     });
     
+    console.log(`[DEBUG] Auth response:`, { authUser, authError });
+    
     if (authError) {
       console.error('Auth creation error:', authError);
+      console.error('Auth error details:', JSON.stringify(authError, null, 2));
       return res.status(500).json({ 
         error: 'Failed to create user in auth',
         details: authError.message 
@@ -531,14 +543,37 @@ exports.createUser = async (req, res) => {
     }
     
     // Validate that userId is a valid UUID
-    const userId = authUser?.id;
-    if (!userId || !isValidUUID(userId)) {
-      console.error('Invalid userId received from auth creation:', { userId, authUser });
+    // Try different paths to get the user ID
+    let userId = null;
+    
+    if (authUser?.id && isValidUUID(authUser.id)) {
+      userId = authUser.id;
+      console.log(`✓ Got userId from authUser.id: ${userId}`);
+    } else if (authUser?.user?.id && isValidUUID(authUser.user.id)) {
+      userId = authUser.user.id;
+      console.log(`✓ Got userId from authUser.user.id: ${userId}`);
+    } else {
+      console.error('[ERROR] Invalid auth response structure:', {
+        authUser,
+        authUserKeys: authUser ? Object.keys(authUser) : null,
+        authUserId: authUser?.id,
+        authUserUserId: authUser?.user?.id,
+        isValidId: authUser?.id ? isValidUUID(authUser.id) : false,
+        isValidUserId: authUser?.user?.id ? isValidUUID(authUser.user.id) : false
+      });
       return res.status(500).json({ 
         error: 'Failed to create user - invalid response from auth service',
-        details: 'User ID is not a valid UUID'
+        details: 'User ID is not a valid UUID',
+        received: {
+          hasId: !!authUser?.id,
+          id: authUser?.id,
+          type: typeof authUser?.id,
+          authUserKeys: authUser ? Object.keys(authUser) : null
+        }
       });
     }
+    
+    console.log(`[DEBUG] Using userId: ${userId}`);
     
     console.log(`✓ Auth user created with ID: ${userId}`);
     
