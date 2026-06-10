@@ -153,6 +153,20 @@ exports.signUp = async (req, res) => {
       });
     }
 
+    // Step 3.5: Auto-confirm email (for development/MVP)
+    // In production, remove this and use email verification flow
+    const { error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
+      newUser.user.id,
+      { email_confirm: true }
+    );
+
+    if (confirmError) {
+      console.warn('⚠️ Warning: Could not auto-confirm email:', confirmError.message);
+      // Continue anyway - user can still verify manually
+    } else {
+      console.log(`✓ Email auto-confirmed for ${email}`);
+    }
+
     // Step 4: Create profile entry in profiles table (may already exist from Supabase trigger)
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
@@ -163,6 +177,7 @@ exports.signUp = async (req, res) => {
           first_name: first_name,
           last_name: last_name,
           role: 'viewer', // Default role for new users
+          email_verified: true, // Mark as verified since we auto-confirmed
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
@@ -205,8 +220,9 @@ exports.signUp = async (req, res) => {
         email: newUser.user.email,
         role: 'viewer'
       },
-      message: 'Sign up successful. Please check your email to confirm your account.',
-      status: 'pending_confirmation'
+      message: 'Sign up successful. Your email has been confirmed. You can now login.',
+      status: 'email_confirmed',
+      ready_to_login: true
     });
   } catch (error) {
     console.error(error);
@@ -365,40 +381,37 @@ exports.getCurrentUser = async (req, res) => {
       });
     }
 
-    // Step 1: Get user from auth
-    const { data: { user }, error: authError } = await supabase.auth.admin.getUserById(userId);
-
-    if (authError || !user) {
-      return res.status(404).json({
-        error: 'User not found'
-      });
-    }
-
-    // Step 2: Get role from profiles table via RPC
-    const { data: roleData, error: roleError } = await supabaseAdmin.rpc(
-      'get_current_user_role',
-      { user_id: userId }
-    );
-
-    // Step 3: Get full profile
+    // Step 1: Get user from profiles table (don't need auth check, JWT proves identity)
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single();
 
-    if (profileError && profileError.code !== 'PGRST116') {
+    if (profileError) {
       console.error('Profile fetch error:', profileError);
+      return res.status(404).json({
+        success: false,
+        error: 'User profile not found'
+      });
     }
 
+    // Step 2: Get role - already in profile
+    const userRole = profile?.role || 'viewer';
+
+    // Step 3: Return user data
     res.status(200).json({
+      success: true,
       user: {
-        id: user.id,
-        email: user.email,
-        role: roleData || 'viewer',
-        first_name: profile?.first_name,
-        last_name: profile?.last_name,
-        user_metadata: user.user_metadata || {}
+        id: profile.id,
+        email: profile.email,
+        role: userRole,
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        phone_number: profile.phone_number,
+        is_active: profile.is_active,
+        created_at: profile.created_at,
+        updated_at: profile.updated_at
       }
     });
   } catch (error) {
