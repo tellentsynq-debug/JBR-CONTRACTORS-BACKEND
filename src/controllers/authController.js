@@ -29,20 +29,34 @@ exports.signIn = async (req, res) => {
 
     const { user, session } = data;
 
-    // Step 2: Get user role from profiles table via RPC
-    const { data: roleData, error: roleError } = await supabaseAdmin.rpc(
-      'get_current_user_role',
-      { user_id: user.id }
-    );
+    // Step 2: Get user role from profiles table or RPC
+    let userRole = 'viewer'; // Default role
+    
+    try {
+      // Try to get role from profiles table directly
+      const { data: profileData, error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
 
-    if (roleError) {
-      console.error('Role fetch error:', roleError);
-      return res.status(400).json({
-        error: 'Failed to fetch user role'
-      });
+      if (!profileError && profileData?.role) {
+        userRole = profileData.role;
+      } else if (profileError?.code !== 'PGRST116') {
+        // Log unexpected errors (PGRST116 is "not found")
+        console.warn('Profile fetch warning:', profileError?.message);
+      }
+    } catch (err) {
+      console.warn('Error fetching role:', err.message);
+      // Continue with default role
     }
 
-    const userRole = roleData || 'viewer'; // Default to viewer
+    // Alternative: Try RPC as fallback if needed
+    // const { data: roleData, error: roleError } = await supabaseAdmin.rpc(
+    //   'get_current_user_role',
+    //   { user_id: user.id }
+    // );
+    // if (!roleError && roleData) userRole = roleData;
 
     // Step 3: Return user data with session token
     res.status(200).json({
@@ -92,21 +106,32 @@ exports.signUp = async (req, res) => {
     const userExists = existingUser?.users?.some(u => u.email === email);
 
     if (userExists) {
-      // User exists but might be unverified - resend confirmation email
-      console.log(`User ${email} already exists, resending confirmation email`);
+      // User exists but might be unverified
+      console.log(`User ${email} already exists`);
       
-      const { error: resendError } = await supabase.auth.resendEnrollmentEmail(email);
-      
-      if (resendError) {
+      // Generate a new confirmation link
+      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'signup',
+        email: email
+      });
+
+      if (linkError) {
+        console.error('Link generation error:', linkError);
         return res.status(400).json({
-          error: 'User already registered. Failed to resend confirmation email.'
+          error: 'User already registered. Failed to resend confirmation link.'
         });
       }
 
+      // In production, send this link via email
+      // For now, return it in response (NOT for production!)
+      console.log(`Confirmation link: ${linkData.properties.confirmation_url}`);
+
       return res.status(200).json({
-        message: 'Account already exists. Confirmation email resent.',
+        message: 'Account already exists. Confirmation link generated.',
         email: email,
-        status: 'pending_confirmation'
+        status: 'pending_confirmation',
+        // In production, remove this and send via email instead
+        confirmationLink: process.env.NODE_ENV === 'development' ? linkData.properties.confirmation_url : undefined
       });
     }
 
@@ -128,7 +153,7 @@ exports.signUp = async (req, res) => {
       });
     }
 
-    // Step 4: Create profile entry in profiles table
+    // Step 4: Create profile entry in profiles table (may already exist from Supabase trigger)
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert([
@@ -143,19 +168,33 @@ exports.signUp = async (req, res) => {
         }
       ]);
 
-    if (profileError) {
+    // Handle duplicate profile error (profile might be created by Supabase trigger)
+    if (profileError && profileError.code !== '23505') {
+      // Only log if it's not a duplicate key error
       console.error('Profile creation error:', profileError);
-      // Don't fail - profile might already exist
     }
 
-    // Step 5: Send confirmation email via Supabase
-    const { error: emailError } = await supabase.auth.resendEnrollmentEmail(email);
-
-    if (emailError) {
-      console.error('Email send error:', emailError);
-      return res.status(400).json({
-        error: 'User created but failed to send confirmation email'
+    // Step 5: Generate confirmation link
+    let confirmationLink = null;
+    try {
+      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'signup',
+        email: email,
+        skipEmailVerification: false // Ensure email verification is required
       });
+
+      if (linkError) {
+        console.warn('⚠️ Confirmation link generation warning:', linkError.message);
+      } else {
+        // Check if linkData has properties or if it's directly the link
+        confirmationLink = linkData?.properties?.confirmation_url || linkData?.confirmation_url;
+        console.log(`✓ Confirmation link generated for ${email}`);
+        if (confirmationLink) {
+          console.log(`  Link: ${confirmationLink.substring(0, 80)}...`);
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not generate confirmation link:', err.message);
     }
 
     // Step 6: Return success response
@@ -178,7 +217,7 @@ exports.signUp = async (req, res) => {
 // Verify Email (Confirm signup)
 exports.verifyEmail = async (req, res) => {
   try {
-    const { token, type } = req.query; // token from email link, type = 'signup'
+    const { token } = req.query; // token from email link
 
     if (!token) {
       return res.status(400).json({
@@ -186,40 +225,61 @@ exports.verifyEmail = async (req, res) => {
       });
     }
 
-    // Verify token with Supabase
-    const { data, error } = await supabase.auth.verifyOtp({
-      token_hash: token,
-      type: type || 'signup'
-    });
+    // Note: In modern Supabase implementations, email verification happens automatically
+    // when the user clicks the link in the email and gets redirected to the app.
+    // This endpoint is for manual verification of the token.
 
-    if (error) {
-      console.error('Token verification error:', error);
+    // Method 1: Verify using the token from Supabase
+    // The token in the email link can be used to authenticate the user
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: token,
+        type: 'email'
+      });
+
+      if (error) {
+        console.error('OTP verification error:', error);
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid or expired verification token',
+          details: error.message
+        });
+      }
+
+      const { user, session } = data;
+
+      // Mark email as verified in profiles table (if not already)
+      await supabaseAdmin
+        .from('profiles')
+        .update({ email_verified: true })
+        .eq('id', user.id);
+
+      // Get user role
+      const { data: roleData } = await supabaseAdmin.rpc(
+        'get_current_user_role',
+        { user_id: user.id }
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Email verified successfully',
+        user: {
+          id: user.id,
+          email: user.email,
+          role: roleData || 'viewer'
+        },
+        session: {
+          access_token: session?.access_token,
+          refresh_token: session?.refresh_token
+        }
+      });
+    } catch (err) {
+      console.error('Verification error:', err);
       return res.status(400).json({
-        error: 'Invalid or expired verification token'
+        success: false,
+        error: 'Email verification failed'
       });
     }
-
-    const { user, session } = data;
-
-    // Get user role
-    const { data: roleData } = await supabaseAdmin.rpc(
-      'get_current_user_role',
-      { user_id: user.id }
-    );
-
-    res.status(200).json({
-      success: true,
-      message: 'Email verified successfully',
-      user: {
-        id: user.id,
-        email: user.email,
-        role: roleData || 'viewer'
-      },
-      session: {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token
-      }
-    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -553,6 +613,77 @@ exports.updatePassword = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Password updated successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ⚠️ DEVELOPMENT ONLY: Confirm Email (For testing - remove in production)
+exports.confirmEmailDev = async (req, res) => {
+  try {
+    // Only allow in development
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({
+        success: false,
+        error: 'This endpoint is only available in development'
+      });
+    }
+
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: 'Email is required'
+      });
+    }
+
+    // Get user by email
+    const { data: users, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (listError) {
+      console.error('Error listing users:', listError);
+      return res.status(400).json({
+        error: 'Failed to find user'
+      });
+    }
+
+    const user = users?.users?.find(u => u.email === email);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Confirm email by updating user
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+      email_confirm: true // Mark email as confirmed
+    });
+
+    if (updateError) {
+      console.error('Error confirming email:', updateError);
+      return res.status(400).json({
+        error: 'Failed to confirm email'
+      });
+    }
+
+    // Also update profiles table
+    await supabaseAdmin
+      .from('profiles')
+      .update({ email_verified: true })
+      .eq('id', user.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Email confirmed successfully (development only)',
+      user: {
+        id: user.id,
+        email: user.email,
+        email_confirmed_at: new Date().toISOString()
+      }
     });
   } catch (error) {
     console.error(error);
