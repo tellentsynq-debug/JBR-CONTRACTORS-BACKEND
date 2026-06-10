@@ -511,8 +511,8 @@ exports.createUser = async (req, res) => {
     
     // If a non-default role is requested, check if requesting user is admin
     if (role && role !== 'user') {
-      // Check if requesting user is admin or super_admin
-      if (!['admin', 'super_admin'].includes(requestingUserProfile.role)) {
+      // Check if requesting user is admin
+      if (!['admin'].includes(requestingUserProfile.role)) {
         return res.status(403).json({
           success: false,
           error: 'Failed to update user profile',
@@ -627,7 +627,7 @@ exports.createUser = async (req, res) => {
       };
       
       // Only include role if requesting user is admin AND role is being set to something other than default
-      if (['admin', 'super_admin'].includes(requestingUserProfile?.role) && role !== 'user') {
+      if (['admin'].includes(requestingUserProfile?.role) && role !== 'user') {
         updateObj.role = role;
       }
       
@@ -680,7 +680,7 @@ exports.createUser = async (req, res) => {
     };
     
     // Only include role if requesting user is admin AND role is being set to something other than default
-    if (['admin', 'super_admin'].includes(requestingUserProfile?.role) && role !== 'user') {
+    if (['admin'].includes(requestingUserProfile?.role) && role !== 'user') {
       insertObj.role = role;
     }
     
@@ -813,32 +813,30 @@ exports.updateUser = async (req, res) => {
       console.log(`[DEBUG] Requesting user role: ${requestingUser?.role}`);
       
       // Check permission based on target role
-      const isTargetAdminRole = role === 'admin' || role === 'super_admin';
-      const isRequesterSuperAdmin = requestingUser?.role === 'super_admin';
+      const isTargetAdminRole = role === 'admin';
       const isRequesterAdmin = requestingUser?.role === 'admin';
       
       console.log(`[DEBUG] Permission check:`, {
         isTargetAdminRole,
-        isRequesterSuperAdmin,
         isRequesterAdmin,
         currentUserRole: requestingUser?.role
       });
       
-      // Only super_admin can grant/revoke admin roles
-      if (isTargetAdminRole && !isRequesterSuperAdmin) {
-        console.warn(`[WARN] Admin role change denied - requesting user is ${requestingUser?.role}, not super_admin`);
+      // Only admin can grant/revoke admin roles
+      if (isTargetAdminRole && !isRequesterAdmin) {
+        console.warn(`[WARN] Admin role change denied - requesting user is ${requestingUser?.role}, not admin`);
         return res.status(403).json({ 
-          error: 'Unauthorized: Only super admins can change admin roles',
-          requiredRole: 'super_admin',
+          error: 'Unauthorized: Only admins can change admin roles',
+          requiredRole: 'admin',
           yourRole: requestingUser?.role
         });
       }
       
-      // Regular admins can change regular user roles
-      if (!isTargetAdminRole && !isRequesterAdmin && !isRequesterSuperAdmin) {
+      // Admins can change user roles
+      if (!isTargetAdminRole && !isRequesterAdmin) {
         console.warn(`[WARN] User role change denied - requesting user is ${requestingUser?.role}`);
         return res.status(403).json({ 
-          error: 'Unauthorized: Only admins or higher can change user roles',
+          error: 'Unauthorized: Only admins can change user roles',
           requiredRole: 'admin',
           yourRole: requestingUser?.role
         });
@@ -934,7 +932,7 @@ exports.updateUser = async (req, res) => {
             error: 'Failed to update user role',
             details: roleError.message,
             hint: 'Database trigger "prevent_unauthorized_role_change" is preventing this operation',
-            requiredRole: 'super_admin',
+            requiredRole: 'admin',
             yourRole: requestingUser?.role,
             code: roleError.code
           });

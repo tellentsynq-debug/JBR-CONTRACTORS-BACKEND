@@ -32,6 +32,9 @@ exports.signIn = async (req, res) => {
     // Step 2: Get user role from profiles table or RPC
     let userRole = 'viewer'; // Default role
     
+    // Check if user is marked as admin in auth metadata
+    const isAuthAdmin = user?.user_metadata?.is_admin === true;
+    
     try {
       // Try to get role from profiles table directly
       const { data: profileData, error: profileError } = await supabaseAdmin
@@ -49,6 +52,12 @@ exports.signIn = async (req, res) => {
     } catch (err) {
       console.warn('Error fetching role:', err.message);
       // Continue with default role
+    }
+
+    // Override role if user is marked as admin in auth metadata
+    if (isAuthAdmin) {
+      userRole = 'admin';
+      console.log(`[INFO] User ${user.id} has admin flag in auth metadata, setting role to admin`);
     }
 
     // Alternative: Try RPC as fallback if needed
@@ -405,7 +414,15 @@ exports.getCurrentUser = async (req, res) => {
     }
 
     // Step 2: Get role - already in profile
-    const userRole = profile?.role || 'viewer';
+    let userRole = profile?.role || 'viewer';
+
+    // Check if user is marked as admin in JWT/auth
+    // JWT token contains user_metadata, check for is_admin flag
+    const tokenData = req.user || {}; // From middleware
+    if (tokenData?.user_metadata?.is_admin === true) {
+      userRole = 'admin';
+      console.log(`[INFO] User ${userId} has admin flag, setting role to admin`);
+    }
 
     // Step 3: Return user data
     res.status(200).json({
@@ -702,6 +719,207 @@ exports.confirmEmailDev = async (req, res) => {
         email: user.email,
         email_confirmed_at: new Date().toISOString()
       }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Admin Sign Up
+exports.adminSignUp = async (req, res) => {
+  try {
+    const { email, password, first_name, last_name, admin_key } = req.body;
+
+    // Validation
+    if (!email || !password || !first_name || !last_name) {
+      return res.status(400).json({
+        error: 'Email, password, first name, and last name are required'
+      });
+    }
+
+    // Validate admin secret key (from .env)
+    const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || 'admin123';
+    if (admin_key !== ADMIN_SECRET_KEY) {
+      return res.status(403).json({
+        error: 'Invalid admin secret key. Admin registration failed.'
+      });
+    }
+
+    // Validate email domain
+    if (!email.endsWith('@jbrstaffingsolutions.com')) {
+      return res.status(400).json({
+        error: 'Admin email must be from @jbrstaffingsolutions.com domain'
+      });
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      return res.status(400).json({
+        error: 'Password must be at least 8 characters'
+      });
+    }
+
+    // Check if email already exists
+    const { data: existingUser } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .single();
+
+    if (existingUser) {
+      return res.status(400).json({
+        error: 'Email already exists'
+      });
+    }
+
+    // Create user in auth with email confirmation
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        first_name,
+        last_name,
+        is_admin: true
+      }
+    });
+
+    if (authError) {
+      console.error('Auth creation error:', authError);
+      return res.status(500).json({
+        error: 'Failed to create admin account',
+        details: authError.message
+      });
+    }
+
+    const userId = authUser?.user?.id;
+    if (!userId) {
+      return res.status(500).json({
+        error: 'Failed to create admin - invalid user ID'
+      });
+    }
+
+    // Check if profile already exists
+    const { data: existingProfile, error: checkError } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    let profileData;
+    let profileError;
+
+    if (existingProfile) {
+      // Profile auto-created by trigger, just return success
+      console.log(`[INFO] Profile already exists for admin ${userId}`);
+      profileData = [existingProfile];
+      profileError = null;
+    } else {
+      // Create new profile with default role
+      console.log(`[INFO] Creating new profile for admin ${userId}...`);
+      const { data: insertData, error: insertError } = await supabaseAdmin
+        .from('profiles')
+        .insert([{
+          id: userId,
+          email,
+          first_name,
+          last_name,
+          role: 'viewer',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select();
+      
+      profileData = insertData;
+      profileError = insertError;
+    }
+
+    if (profileError && profileError.code !== '23505') {
+      console.error('Profile error:', profileError);
+      // Delete auth user if profile creation fails
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+      } catch (deleteError) {
+        console.error('Failed to rollback admin user:', deleteError);
+      }
+      return res.status(500).json({
+        error: 'Failed to create admin profile',
+        details: profileError.message
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Admin account created successfully',
+      admin: {
+        id: userId,
+        email,
+        first_name,
+        last_name,
+        role: 'admin',
+        is_active: true,
+        created_at: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Promote User to Admin
+exports.promoteToAdmin = async (req, res) => {
+  try {
+    const { userId, admin_key } = req.body;
+
+    if (!userId || !admin_key) {
+      return res.status(400).json({
+        error: 'User ID and admin secret key are required'
+      });
+    }
+
+    // Validate admin secret key
+    const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || 'admin123';
+    if (admin_key !== ADMIN_SECRET_KEY) {
+      return res.status(403).json({
+        error: 'Invalid admin secret key'
+      });
+    }
+
+    // Get the user from profiles
+    const { data: user, error: userError } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !user) {
+      return res.status(404).json({
+        error: 'User not found'
+      });
+    }
+
+    // Update role to admin
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update({ role: 'admin' })
+      .eq('id', userId)
+      .select();
+
+    if (updateError) {
+      console.error('Promotion error:', updateError);
+      return res.status(500).json({
+        error: 'Failed to promote user to admin',
+        details: updateError.message
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'User promoted to admin successfully',
+      user: updated?.[0] || updated
     });
   } catch (error) {
     console.error(error);

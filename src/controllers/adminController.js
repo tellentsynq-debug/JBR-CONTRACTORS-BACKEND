@@ -28,19 +28,20 @@ exports.createAdmin = async (req, res) => {
       });
     }
 
+    // Check if requesting user is admin
+    const { data: adminUser, error: adminError } = await supabase.admin
+      .from('profiles')
+      .select('role')
+      .eq('id', superAdminId)
+      .single();
+
+    if (adminError || adminUser?.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can create other admins' });
+    }
+
     const connection = await pool.getConnection();
 
     try {
-      // Verify Super Admin exists and is active
-      const [superAdmin] = await connection.query(
-        'SELECT id FROM super_admins WHERE id = ? AND status = "active"',
-        [superAdminId]
-      );
-
-      if (superAdmin.length === 0) {
-        return res.status(403).json({ error: 'Only active super admins can create admins' });
-      }
-
       // Check if email already exists in admins table
       const [existingAdmin] = await connection.query(
         'SELECT id FROM admins WHERE email = ?',

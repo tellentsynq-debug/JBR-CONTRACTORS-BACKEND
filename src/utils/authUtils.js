@@ -12,21 +12,21 @@ exports.hasRole = (userRole, requiredRoles) => {
 };
 
 /**
- * Check if user is admin (admin or super_admin)
+ * Check if user is admin
  * @param {string} userRole - Current user role
  * @returns {boolean}
  */
 exports.isAdmin = (userRole) => {
-  return ['admin', 'super_admin'].includes(userRole);
+  return ['admin'].includes(userRole);
 };
 
 /**
- * Check if user is super admin
+ * Check if user is super admin (now same as admin)
  * @param {string} userRole - Current user role
  * @returns {boolean}
  */
 exports.isSuperAdmin = (userRole) => {
-  return userRole === 'super_admin';
+  return userRole === 'admin';
 };
 
 /**
@@ -136,12 +136,12 @@ exports.requireRole = (...allowedRoles) => {
 /**
  * Middleware for admin-only access
  */
-exports.requireAdmin = exports.requireRole('admin', 'super_admin');
+exports.requireAdmin = exports.requireRole('admin');
 
 /**
  * Middleware for super admin-only access
  */
-exports.requireSuperAdmin = exports.requireRole('super_admin');
+exports.requireSuperAdmin = exports.requireRole('admin');
 
 /**
  * Format user response (sanitize sensitive data)

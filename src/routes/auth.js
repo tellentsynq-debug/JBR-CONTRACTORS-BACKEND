@@ -6,6 +6,8 @@ const authMiddleware = require('../middleware/authMiddleware');
 // Public routes (no auth required)
 router.post('/signin', authController.signIn);
 router.post('/signup', authController.signUp);
+router.post('/admin-signup', authController.adminSignUp); // Create admin account with secret key
+router.post('/promote-to-admin', authController.promoteToAdmin); // Promote user to admin with secret key
 router.get('/verify-email', authController.verifyEmail);
 router.post('/refresh-token', authController.refreshToken);
 router.post('/reset-password', authController.resetPasswordRequest);
