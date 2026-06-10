@@ -177,16 +177,24 @@ exports.signUp = async (req, res) => {
           first_name: first_name,
           last_name: last_name,
           role: 'viewer', // Default role for new users
-          email_verified: true, // Mark as verified since we auto-confirmed
+          is_active: true,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
       ]);
 
     // Handle duplicate profile error (profile might be created by Supabase trigger)
-    if (profileError && profileError.code !== '23505') {
-      // Only log if it's not a duplicate key error
-      console.error('Profile creation error:', profileError);
+    if (profileError) {
+      if (profileError.code === '23505') {
+        // Duplicate key - profile already exists, this is fine
+        console.log(`✓ Profile already exists for ${email}`);
+      } else if (profileError.code === 'PGRST204') {
+        // Column doesn't exist - skip this, profiles might auto-create via trigger
+        console.log(`ℹ️ Profile insert skipped: ${profileError.message}`);
+      } else {
+        // Other errors - log but don't fail
+        console.warn(`⚠️ Profile creation warning: ${profileError.message}`);
+      }
     }
 
     // Step 5: Generate confirmation link
@@ -683,11 +691,8 @@ exports.confirmEmailDev = async (req, res) => {
       });
     }
 
-    // Also update profiles table
-    await supabaseAdmin
-      .from('profiles')
-      .update({ email_verified: true })
-      .eq('id', user.id);
+    // Note: Don't update profiles table - email_verified column doesn't exist
+    // Email confirmation is handled at auth level only
 
     res.status(200).json({
       success: true,

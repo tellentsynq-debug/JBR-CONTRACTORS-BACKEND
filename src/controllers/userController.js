@@ -496,6 +496,31 @@ exports.createUser = async (req, res) => {
       });
     }
     
+    // Fetch requesting user's role for permission checking
+    const { data: requestingUserProfile, error: requestingUserError } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', requestingUserId)
+      .single();
+    
+    if (requestingUserError || !requestingUserProfile) {
+      return res.status(401).json({
+        error: 'Could not verify your permissions'
+      });
+    }
+    
+    // If a non-default role is requested, check if requesting user is admin
+    if (role && role !== 'user') {
+      // Check if requesting user is admin or super_admin
+      if (!['admin', 'super_admin'].includes(requestingUserProfile.role)) {
+        return res.status(403).json({
+          success: false,
+          error: 'Failed to update user profile',
+          details: 'Only admins can change roles'
+        });
+      }
+    }
+    
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -593,16 +618,23 @@ exports.createUser = async (req, res) => {
     if (existingProfile) {
       console.log(`[INFO] Profile already exists for ${userId}, updating instead of creating`);
       
+      // Build update object - exclude role unless user is admin and requesting a role change
+      const updateObj = {
+        first_name: firstName,
+        last_name: lastName,
+        phone_number: phoneNumber || null,
+        is_active: isActive
+      };
+      
+      // Only include role if requesting user is admin AND role is being set to something other than default
+      if (['admin', 'super_admin'].includes(requestingUserProfile?.role) && role !== 'user') {
+        updateObj.role = role;
+      }
+      
       // Update existing profile with provided data
       const { data: updatedProfile, error: updateError } = await supabaseAdmin
         .from('profiles')
-        .update({
-          first_name: firstName,
-          last_name: lastName,
-          phone_number: phoneNumber || null,
-          role: role,
-          is_active: isActive
-        })
+        .update(updateObj)
         .eq('id', userId)
         .select();
       
@@ -635,18 +667,26 @@ exports.createUser = async (req, res) => {
     
     // Profile doesn't exist, create it
     console.log(`[DEBUG] Creating new profile for user ID: ${userId}`);
+    
+    // Build insert object - exclude role unless user is admin and requesting a role change
+    const insertObj = {
+      id: userId,
+      email,
+      first_name: firstName,
+      last_name: lastName,
+      phone_number: phoneNumber || null,
+      is_active: isActive,
+      created_at: new Date().toISOString()
+    };
+    
+    // Only include role if requesting user is admin AND role is being set to something other than default
+    if (['admin', 'super_admin'].includes(requestingUserProfile?.role) && role !== 'user') {
+      insertObj.role = role;
+    }
+    
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .insert([{
-        id: userId,
-        email,
-        first_name: firstName,
-        last_name: lastName,
-        phone_number: phoneNumber || null,
-        role: role,
-        is_active: isActive,
-        created_at: new Date().toISOString()
-      }])
+      .insert([insertObj])
       .select();
     
     if (profileError) {
