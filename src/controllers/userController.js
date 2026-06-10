@@ -388,28 +388,44 @@ exports.login = async (req, res) => {
 // Get all users (Admin only)
 exports.getAllUsers = async (req, res) => {
   try {
+    console.log('Fetching all users from profiles table');
+    
     const { data: users, error } = await supabase
       .from('profiles')
       .select('id, email, first_name, last_name, role, is_active, last_login, created_at');
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database query error:', error);
+      throw error;
+    }
+    
+    console.log(`Retrieved ${users?.length || 0} users`);
     
     // Format response
-    const formattedUsers = users.map(u => ({
-      id: u.id,
-      first_name: u.first_name,
-      last_name: u.last_name,
-      email: u.email,
-      role: u.role || 'user',
-      is_active: u.is_active,
-      last_login: u.last_login,
-      created_at: u.created_at
-    }));
+    const formattedUsers = (users || []).map(u => {
+      // Validate UUID before returning
+      if (!isValidUUID(u.id)) {
+        console.warn(`Invalid UUID found in profiles table: ${u.id}`);
+      }
+      return {
+        id: u.id,
+        first_name: u.first_name,
+        last_name: u.last_name,
+        email: u.email,
+        role: u.role || 'user',
+        is_active: u.is_active,
+        last_login: u.last_login,
+        created_at: u.created_at
+      };
+    });
     
     res.json(formattedUsers);
   } catch (error) {
     console.error('Error fetching users:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message || 'Failed to fetch users',
+      details: error.hint || error.details || null
+    });
   }
 };
 
@@ -423,17 +439,24 @@ exports.getUserById = async (req, res) => {
       return res.status(400).json({ error: 'Invalid user ID format - must be a valid UUID' });
     }
     
+    console.log(`Fetching user by ID: ${id}`);
+    
     const { data: user, error } = await supabase
       .from('profiles')
       .select('id, email, first_name, last_name, role, is_active, last_login, created_at')
       .eq('id', id)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database query error:', error);
+      throw error;
+    }
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    
+    console.log(`✓ User found: ${user.email}`);
     
     res.json({
       id: user.id,
@@ -447,7 +470,10 @@ exports.getUserById = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching user:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message || 'Failed to fetch user',
+      details: error.hint || error.details || null
+    });
   }
 };
 
@@ -504,7 +530,17 @@ exports.createUser = async (req, res) => {
       });
     }
     
-    const userId = authUser.id;
+    // Validate that userId is a valid UUID
+    const userId = authUser?.id;
+    if (!userId || !isValidUUID(userId)) {
+      console.error('Invalid userId received from auth creation:', { userId, authUser });
+      return res.status(500).json({ 
+        error: 'Failed to create user - invalid response from auth service',
+        details: 'User ID is not a valid UUID'
+      });
+    }
+    
+    console.log(`✓ Auth user created with ID: ${userId}`);
     
     // Create profile record
     const { data: profileData, error: profileError } = await supabaseAdmin
@@ -524,7 +560,14 @@ exports.createUser = async (req, res) => {
     if (profileError) {
       console.error('Profile creation error:', profileError);
       // Delete the auth user if profile creation fails
-      await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (isValidUUID(userId)) {
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(userId);
+          console.log(`✓ Rolled back auth user creation for ID: ${userId}`);
+        } catch (deleteError) {
+          console.error('Failed to rollback auth user creation:', deleteError);
+        }
+      }
       return res.status(500).json({ 
         error: 'Failed to create user profile',
         details: profileError.message 
@@ -664,21 +707,37 @@ exports.deleteUser = async (req, res) => {
     }
     
     // Delete from auth.users using service role (cascades to profiles via FK)
-    const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(id);
-    
-    if (deleteAuthError) {
-      console.error('Auth deletion error:', deleteAuthError);
+    try {
+      console.log(`Attempting to delete auth user: ${id}`);
+      const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(id);
+      
+      if (deleteAuthError) {
+        console.error('Auth deletion error:', deleteAuthError);
+        return res.status(500).json({ 
+          error: 'Failed to delete user from auth',
+          details: deleteAuthError.message 
+        });
+      }
+      console.log(`✓ Auth user deleted: ${id}`);
+    } catch (deleteError) {
+      console.error('Exception while deleting auth user:', deleteError);
       return res.status(500).json({ 
         error: 'Failed to delete user from auth',
-        details: deleteAuthError.message 
+        details: deleteError.message 
       });
     }
     
     // Also delete from profiles in case cascade didn't work
-    await supabaseAdmin
-      .from('profiles')
-      .delete()
-      .eq('id', id);
+    try {
+      await supabaseAdmin
+        .from('profiles')
+        .delete()
+        .eq('id', id);
+      console.log(`✓ Profile deleted: ${id}`);
+    } catch (profileDeleteError) {
+      console.error('Error deleting profile:', profileDeleteError);
+      // Don't fail the request if profile deletion fails
+    }
     
     res.json({ 
       message: 'User deleted successfully',
