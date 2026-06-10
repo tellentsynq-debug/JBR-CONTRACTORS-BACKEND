@@ -577,7 +577,64 @@ exports.createUser = async (req, res) => {
     
     console.log(`✓ Auth user created with ID: ${userId}`);
     
-    // Create profile record
+    // Check if profile already exists (in case of trigger auto-creation)
+    console.log(`[DEBUG] Checking if profile already exists for ID: ${userId}`);
+    const { data: existingProfile, error: checkError } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .single();
+    
+    if (checkError && checkError.code !== 'PGRST116') {
+      // PGRST116 = no rows found (which is expected for new users)
+      console.warn(`Unexpected error checking for existing profile:`, checkError);
+    }
+    
+    if (existingProfile) {
+      console.log(`[INFO] Profile already exists for ${userId}, updating instead of creating`);
+      
+      // Update existing profile with provided data
+      const { data: updatedProfile, error: updateError } = await supabaseAdmin
+        .from('profiles')
+        .update({
+          first_name: firstName,
+          last_name: lastName,
+          phone_number: phoneNumber || null,
+          role: role,
+          is_active: isActive
+        })
+        .eq('id', userId)
+        .select();
+      
+      if (updateError) {
+        console.error('Profile update error:', updateError);
+        return res.status(500).json({ 
+          error: 'Failed to update user profile',
+          details: updateError.message 
+        });
+      }
+      
+      console.log(`✓ Profile updated for user: ${userId}`);
+      
+      return res.status(201).json({ 
+        message: 'User created successfully',
+        note: 'Profile was auto-created by system, updated with provided data',
+        user: {
+          id: userId,
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          phone_number: phoneNumber,
+          role,
+          is_active: isActive,
+          temp_password: tempPassword,
+          note_password: 'Share temporary password with user - they should change it on first login'
+        }
+      });
+    }
+    
+    // Profile doesn't exist, create it
+    console.log(`[DEBUG] Creating new profile for user ID: ${userId}`);
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert([{
@@ -594,6 +651,33 @@ exports.createUser = async (req, res) => {
     
     if (profileError) {
       console.error('Profile creation error:', profileError);
+      console.error('Profile error details:', {
+        code: profileError.code,
+        message: profileError.message,
+        details: profileError.details,
+        hint: profileError.hint
+      });
+      
+      // Check if it's a duplicate key error
+      if (profileError.code === '23505') {
+        console.log(`[INFO] Profile already exists (duplicate key). Fetching existing profile...`);
+        
+        // Try to fetch and return existing profile
+        const { data: existing } = await supabaseAdmin
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (existing) {
+          return res.status(201).json({ 
+            message: 'User created successfully',
+            note: 'Profile already existed in system',
+            user: existing
+          });
+        }
+      }
+      
       // Delete the auth user if profile creation fails
       if (isValidUUID(userId)) {
         try {
@@ -605,7 +689,8 @@ exports.createUser = async (req, res) => {
       }
       return res.status(500).json({ 
         error: 'Failed to create user profile',
-        details: profileError.message 
+        details: profileError.message,
+        code: profileError.code
       });
     }
     
