@@ -26,6 +26,7 @@ const superAdminRoutes = require('./routes/superAdmins');
 const adminRoutes = require('./routes/admins');
 const candidateRoutes = require('./routes/candidates');
 const groupRoutes = require('./routes/groups');
+const provinceRoutes = require('./routes/provinces');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -37,6 +38,7 @@ app.use('/api/super-admins', superAdminRoutes);
 app.use('/api/admins', adminRoutes);
 app.use('/api/candidates', candidateRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/provinces', provinceRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
