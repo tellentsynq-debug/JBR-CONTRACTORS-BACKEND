@@ -84,7 +84,6 @@ exports.getAllGroups = async (req, res) => {
         is_active,
         created_by,
         created_at,
-        updated_at,
         candidate_group_members(count)
       `)
       .order('created_at', { ascending: false });

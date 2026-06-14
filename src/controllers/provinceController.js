@@ -106,7 +106,6 @@ exports.getAllProvinces = async (req, res) => {
         code,
         is_active,
         created_at,
-        updated_at,
         cities(count)
       `)
       .order('name', { ascending: true });

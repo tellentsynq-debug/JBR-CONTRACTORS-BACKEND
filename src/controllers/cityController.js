@@ -105,7 +105,6 @@ exports.getAllCities = async (req, res) => {
         province_id,
         is_active,
         created_at,
-        updated_at,
         provinces(id, name, code),
         candidates(count)
       `)
