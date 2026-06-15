@@ -584,7 +584,10 @@ exports.getGroupMembers = async (req, res) => {
           email,
           phone_number,
           job_category_id,
-          job_industry_id
+          job_industry_id,
+          province,
+          city,
+          verification_status
         )
       `, { count: 'exact' })
       .eq('group_id', id)
@@ -599,6 +602,15 @@ exports.getGroupMembers = async (req, res) => {
       });
     }
 
+    // Map verification status to display format
+    const mappedMembers = members.map(member => ({
+      ...member,
+      candidates: member.candidates ? {
+        ...member.candidates,
+        verification_status: member.candidates.verification_status === 'verified' ? 'SHORTLISTED' : member.candidates.verification_status
+      } : null
+    }));
+
     res.status(200).json({
       message: 'Group members retrieved successfully',
       group: {
@@ -612,7 +624,7 @@ exports.getGroupMembers = async (req, res) => {
         offset: parseInt(offset),
         total: count
       },
-      data: members
+      data: mappedMembers
     });
   } catch (error) {
     console.error('Error retrieving group members:', error);
