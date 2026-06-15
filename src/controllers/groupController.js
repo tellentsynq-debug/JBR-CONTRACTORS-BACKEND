@@ -602,14 +602,27 @@ exports.getGroupMembers = async (req, res) => {
       });
     }
 
-    // Map verification status to display format
-    const mappedMembers = members.map(member => ({
-      ...member,
-      candidates: member.candidates ? {
+    // Map verification status to display format and remove null fields
+    const mappedMembers = members.map(member => {
+      if (!member.candidates) return member;
+      
+      const candidateData = {
         ...member.candidates,
         verification_status: member.candidates.verification_status === 'verified' ? 'SHORTLISTED' : member.candidates.verification_status
-      } : null
-    }));
+      };
+      
+      // Remove null fields
+      Object.keys(candidateData).forEach(key => {
+        if (candidateData[key] === null) {
+          delete candidateData[key];
+        }
+      });
+      
+      return {
+        ...member,
+        candidates: candidateData
+      };
+    });
 
     res.status(200).json({
       message: 'Group members retrieved successfully',
