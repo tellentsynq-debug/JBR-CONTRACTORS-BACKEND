@@ -624,7 +624,15 @@ exports.getGroupMembers = async (req, res) => {
       };
     });
 
-    res.status(200).json({
+    // Custom JSON replacer to exclude null values
+    const jsonReplacer = (key, value) => {
+      if (value === null) {
+        return undefined;
+      }
+      return value;
+    };
+
+    const responseData = {
       message: 'Group members retrieved successfully',
       group: {
         id: group.id,
@@ -638,7 +646,9 @@ exports.getGroupMembers = async (req, res) => {
         total: count
       },
       data: mappedMembers
-    });
+    };
+
+    res.status(200).json(JSON.parse(JSON.stringify(responseData, jsonReplacer)));
   } catch (error) {
     console.error('Error retrieving group members:', error);
     res.status(500).json({ 
