@@ -29,8 +29,7 @@ exports.getDashboardStats = async (req, res) => {
       supabaseAdmin
         .from('campaigns')
         .select('id', { count: 'exact' })
-        .eq('is_active', true)
-        .is('deleted_at', null),
+        .eq('is_active', true),
 
       // 3. Verified Candidates
       supabaseAdmin
@@ -54,7 +53,6 @@ exports.getDashboardStats = async (req, res) => {
           candidates(count)
         `)
         .eq('is_active', true)
-        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(10),
 
@@ -213,8 +211,7 @@ exports.getDashboardSummary = async (req, res) => {
       supabaseAdmin
         .from('campaigns')
         .select('id', { count: 'exact' })
-        .eq('is_active', true)
-        .is('deleted_at', null),
+        .eq('is_active', true),
 
       supabaseAdmin
         .from('candidates')
