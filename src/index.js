@@ -28,6 +28,7 @@ const candidateRoutes = require('./routes/candidates');
 const groupRoutes = require('./routes/groups');
 const provinceRoutes = require('./routes/provinces');
 const cityRoutes = require('./routes/cities');
+const dashboardRoutes = require('./routes/dashboard');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -41,6 +42,7 @@ app.use('/api/candidates', candidateRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/provinces', provinceRoutes);
 app.use('/api/cities', cityRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
