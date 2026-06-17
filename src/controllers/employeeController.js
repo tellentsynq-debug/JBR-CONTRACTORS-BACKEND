@@ -80,8 +80,8 @@ exports.getAllEmployees = async (req, res) => {
 // Get employee by ID
 exports.getEmployeeById = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const id = req.params.id;
+    if (!id || typeof id !== 'string' || id.trim() === '') {
       return res.status(400).json({ error: 'Invalid employee ID format' });
     }
 
@@ -312,8 +312,8 @@ exports.updateEmployee = async (req, res) => {
 // Delete employee (soft delete)
 exports.deleteEmployee = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const id = req.params.id;
+    if (!id || typeof id !== 'string' || id.trim() === '') {
       return res.status(400).json({ error: 'Invalid employee ID format' });
     }
 
@@ -337,8 +337,8 @@ exports.deleteEmployee = async (req, res) => {
 // Verify employee
 exports.verifyEmployee = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const id = req.params.id;
+    if (!id || typeof id !== 'string' || id.trim() === '') {
       return res.status(400).json({ error: 'Invalid employee ID format' });
     }
 
@@ -375,8 +375,8 @@ exports.verifyEmployee = async (req, res) => {
 // Reject employee
 exports.rejectEmployee = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const id = req.params.id;
+    if (!id || typeof id !== 'string' || id.trim() === '') {
       return res.status(400).json({ error: 'Invalid employee ID format' });
     }
 
