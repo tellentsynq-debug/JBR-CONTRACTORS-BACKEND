@@ -527,8 +527,7 @@ exports.getGroupReport = async (req, res) => {
         is_active,
         created_at,
         candidate_group_members(id)
-      `)
-      .is('deleted_at', null || true);
+      `);
 
     if (groupsError) throw groupsError;
 
