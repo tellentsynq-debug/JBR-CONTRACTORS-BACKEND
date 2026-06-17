@@ -29,7 +29,6 @@ const groupRoutes = require('./routes/groups');
 const provinceRoutes = require('./routes/provinces');
 const cityRoutes = require('./routes/cities');
 const dashboardRoutes = require('./routes/dashboard');
-const masterReportRoutes = require('./routes/masterReport');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -44,7 +43,6 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/provinces', provinceRoutes);
 app.use('/api/cities', cityRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/master-report', masterReportRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

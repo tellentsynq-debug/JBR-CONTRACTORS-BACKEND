@@ -526,26 +526,20 @@ exports.getGroupReport = async (req, res) => {
         name,
         is_active,
         created_at,
-        candidate_group_members(id, created_at)
+        candidate_group_members(id)
       `)
       .is('deleted_at', null || true);
 
     if (groupsError) throw groupsError;
 
-    const dateRange = getDateRange(parseInt(days) || null);
-
     let reports = groups.map(group => {
       const members = group.candidate_group_members || [];
-      const recentMembers = dateRange.startDate 
-        ? members.filter(m => new Date(m.created_at) >= new Date(dateRange.startDate))
-        : [];
 
       return {
         id: group.id,
         name: group.name,
         isActive: group.is_active,
         total: members.length,
-        recentAdditions: recentMembers.length,
         createdAt: group.created_at
       };
     });
