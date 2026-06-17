@@ -29,6 +29,7 @@ const groupRoutes = require('./routes/groups');
 const provinceRoutes = require('./routes/provinces');
 const cityRoutes = require('./routes/cities');
 const dashboardRoutes = require('./routes/dashboard');
+const masterReportRoutes = require('./routes/masterReport');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
