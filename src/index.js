@@ -43,6 +43,7 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/provinces', provinceRoutes);
 app.use('/api/cities', cityRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/master-report', masterReportRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
