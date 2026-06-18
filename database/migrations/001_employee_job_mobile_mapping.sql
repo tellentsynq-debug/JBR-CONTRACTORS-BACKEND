@@ -24,9 +24,6 @@ CREATE TABLE IF NOT EXISTS employee_job_mobile_mapping (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   deleted_at TIMESTAMP WITH TIME ZONE,
   
-  -- Foreign key constraint
-  FOREIGN KEY (job_category_id) REFERENCES job_categories(id) ON DELETE SET NULL,
-  FOREIGN KEY (job_industry_id) REFERENCES job_industries(id) ON DELETE SET NULL,
   CONSTRAINT unique_employee_mobile UNIQUE(employee_id, mobile_number)
 );
 
@@ -44,11 +41,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   ended_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  
-  FOREIGN KEY (employee_id) REFERENCES employee_job_mobile_mapping(employee_id) ON DELETE CASCADE,
-  FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL,
-  FOREIGN KEY (job_category_id) REFERENCES job_categories(id) ON DELETE SET NULL
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create chat_messages table
@@ -62,10 +55,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   sender_type VARCHAR(50) NOT NULL, -- 'employee', 'admin', 'system'
   read_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  
-  FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
-  FOREIGN KEY (employee_id) REFERENCES employee_job_mobile_mapping(employee_id) ON DELETE CASCADE
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for performance

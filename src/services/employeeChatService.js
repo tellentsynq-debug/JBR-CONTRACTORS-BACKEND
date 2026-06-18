@@ -210,9 +210,7 @@ class EmployeeChatService {
         .from('employee_job_mobile_mapping')
         .select(
           `id, employee_id, mobile_number, chat_enabled, 
-           job_category_id, job_industry_id, device_token,
-           job_categories:job_category_id(id, name),
-           job_industries:job_industry_id(id, name)`
+           job_category_id, job_industry_id, device_token`
         )
         .eq('mobile_number', mobileNumber)
         .eq('chat_enabled', true)

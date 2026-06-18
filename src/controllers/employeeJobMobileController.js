@@ -188,9 +188,7 @@ exports.getEmployeeMappings = async (req, res) => {
         `id, employee_id, candidate_id, mobile_number, 
          mobile_verified, chat_enabled, job_category_id, 
          job_industry_id, device_type, last_active_at, 
-         is_active, created_at,
-         job_categories:job_category_id(id, name),
-         job_industries:job_industry_id(id, name)`,
+         is_active, created_at`,
         { count: 'exact' }
       )
       .eq('employee_id', employee_id)
@@ -228,9 +226,7 @@ exports.getActiveEmployeesByJobCategory = async (req, res) => {
       .select(
         `id, employee_id, mobile_number, mobile_verified, 
          chat_enabled, last_active_at, device_type, 
-         job_category_id, job_industry_id,
-         job_categories:job_category_id(id, name),
-         job_industries:job_industry_id(id, name)`,
+         job_category_id, job_industry_id`,
         { count: 'exact' }
       )
       .eq('job_category_id', job_category_id)
