@@ -20,6 +20,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const campaignRoutes = require('./routes/campaigns');
 const employeeRoutes = require('./routes/employees');
+const employeeJobMobileRoutes = require('./routes/employeeJobMobile');
 const jobIndustryRoutes = require('./routes/jobIndustries');
 const jobCategoryRoutes = require('./routes/jobCategories');
 const superAdminRoutes = require('./routes/superAdmins');
@@ -30,11 +31,13 @@ const provinceRoutes = require('./routes/provinces');
 const cityRoutes = require('./routes/cities');
 const dashboardRoutes = require('./routes/dashboard');
 const masterReportRoutes = require('./routes/masterReport');
+const chatRoutes = require('./routes/chat');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/employees', employeeRoutes);
+app.use('/api/employee-job-mobile', employeeJobMobileRoutes);
 app.use('/api/job-industries', jobIndustryRoutes);
 app.use('/api/job-categories', jobCategoryRoutes);
 app.use('/api/super-admins', superAdminRoutes);
@@ -45,6 +48,7 @@ app.use('/api/provinces', provinceRoutes);
 app.use('/api/cities', cityRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/master-report', masterReportRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
