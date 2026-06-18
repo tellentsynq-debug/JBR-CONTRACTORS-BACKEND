@@ -9,6 +9,9 @@ router.use(authMiddleware.verifyToken);
 // Start a new chat session
 router.post('/sessions/start', chatController.startChatSession);
 
+// Get or create chat session for employee
+router.get('/sessions/employee/:employee_id', chatController.getOrCreateSession);
+
 // Get employee's active chat sessions
 router.get('/sessions/:employee_id', chatController.getEmployeeSessions);
 

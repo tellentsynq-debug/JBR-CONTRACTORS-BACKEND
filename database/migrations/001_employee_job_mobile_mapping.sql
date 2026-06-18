@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS employee_job_mobile_mapping (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   employee_id UUID NOT NULL,
   candidate_id INTEGER,
-  job_category_id INTEGER,
-  job_industry_id INTEGER,
+  job_category_id UUID,
+  job_industry_id UUID,
   mobile_number VARCHAR(20) NOT NULL,
   mobile_verified BOOLEAN DEFAULT FALSE,
   mobile_verified_at TIMESTAMP WITH TIME ZONE,
@@ -32,8 +32,8 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   employee_id UUID NOT NULL,
   mobile_number VARCHAR(20) NOT NULL,
-  campaign_id INTEGER,
-  job_category_id INTEGER,
+  campaign_id UUID,
+  job_category_id UUID,
   session_token VARCHAR(255) UNIQUE,
   session_status VARCHAR(50) DEFAULT 'active', -- 'active', 'inactive', 'archived'
   last_message_at TIMESTAMP WITH TIME ZONE,
@@ -59,26 +59,35 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 -- Create indexes for performance
-CREATE INDEX idx_employee_job_mobile_employee_id ON employee_job_mobile_mapping(employee_id);
-CREATE INDEX idx_employee_job_mobile_mobile_number ON employee_job_mobile_mapping(mobile_number);
-CREATE INDEX idx_employee_job_mobile_job_category ON employee_job_mobile_mapping(job_category_id);
-CREATE INDEX idx_employee_job_mobile_chat_enabled ON employee_job_mobile_mapping(chat_enabled);
-CREATE INDEX idx_employee_job_mobile_is_active ON employee_job_mobile_mapping(is_active);
+CREATE INDEX IF NOT EXISTS idx_employee_job_mobile_employee_id ON employee_job_mobile_mapping(employee_id);
+CREATE INDEX IF NOT EXISTS idx_employee_job_mobile_mobile_number ON employee_job_mobile_mapping(mobile_number);
+CREATE INDEX IF NOT EXISTS idx_employee_job_mobile_job_category ON employee_job_mobile_mapping(job_category_id);
+CREATE INDEX IF NOT EXISTS idx_employee_job_mobile_chat_enabled ON employee_job_mobile_mapping(chat_enabled);
+CREATE INDEX IF NOT EXISTS idx_employee_job_mobile_is_active ON employee_job_mobile_mapping(is_active);
 
-CREATE INDEX idx_chat_sessions_employee_id ON chat_sessions(employee_id);
-CREATE INDEX idx_chat_sessions_mobile_number ON chat_sessions(mobile_number);
-CREATE INDEX idx_chat_sessions_session_status ON chat_sessions(session_status);
-CREATE INDEX idx_chat_sessions_campaign_id ON chat_sessions(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_employee_id ON chat_sessions(employee_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_mobile_number ON chat_sessions(mobile_number);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_session_status ON chat_sessions(session_status);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_campaign_id ON chat_sessions(campaign_id);
 
-CREATE INDEX idx_chat_messages_session_id ON chat_messages(session_id);
-CREATE INDEX idx_chat_messages_employee_id ON chat_messages(employee_id);
-CREATE INDEX idx_chat_messages_sender_type ON chat_messages(sender_type);
-CREATE INDEX idx_chat_messages_created_at ON chat_messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_employee_id ON chat_messages(employee_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_sender_type ON chat_messages(sender_type);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at);
 
 -- Enable Row Level Security
 ALTER TABLE employee_job_mobile_mapping ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing RLS Policies if they exist
+DROP POLICY IF EXISTS "Allow employees to view own mapping" ON employee_job_mobile_mapping;
+DROP POLICY IF EXISTS "Allow admins to manage all mappings" ON employee_job_mobile_mapping;
+DROP POLICY IF EXISTS "Allow service role full access" ON employee_job_mobile_mapping;
+DROP POLICY IF EXISTS "Allow employees to view own sessions" ON chat_sessions;
+DROP POLICY IF EXISTS "Allow admins to manage all sessions" ON chat_sessions;
+DROP POLICY IF EXISTS "Allow employees to view own messages" ON chat_messages;
+DROP POLICY IF EXISTS "Allow admins to manage all messages" ON chat_messages;
 
 -- RLS Policies for employee_job_mobile_mapping
 CREATE POLICY "Allow employees to view own mapping" ON employee_job_mobile_mapping

@@ -285,6 +285,63 @@ class EmployeeChatService {
       throw error;
     }
   }
+
+  /**
+   * Get most recent active session or create one if none exists
+   */
+  static async getOrCreateChatSession(employeeId, mobileNumber, campaignId, jobCategoryId) {
+    try {
+      // First, try to get the most recent active session for this employee
+      const { data: existingSessions, error: getError } = await supabaseAdmin
+        .from('chat_sessions')
+        .select('*')
+        .eq('employee_id', employeeId)
+        .eq('session_status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (getError) throw getError;
+
+      // If an active session exists, return the most recent one
+      if (existingSessions && existingSessions.length > 0) {
+        return {
+          session: existingSessions[0],
+          created: false,
+          message: 'Existing active session found'
+        };
+      }
+
+      // If no active session exists, create a new one
+      if (!mobileNumber) {
+        throw new Error('Mobile number is required to create a new chat session');
+      }
+
+      const sessionToken = this.generateSessionToken();
+
+      const { data: newSession, error: createError } = await supabaseAdmin
+        .from('chat_sessions')
+        .insert([{
+          employee_id: employeeId,
+          mobile_number: mobileNumber,
+          campaign_id: campaignId || null,
+          job_category_id: jobCategoryId || null,
+          session_token: sessionToken,
+          session_status: 'active'
+        }])
+        .select();
+
+      if (createError) throw createError;
+
+      return {
+        session: newSession[0],
+        created: true,
+        message: 'New chat session created'
+      };
+    } catch (error) {
+      console.error('Error in getOrCreateChatSession:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = EmployeeChatService;
