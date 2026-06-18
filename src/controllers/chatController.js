@@ -1,3 +1,5 @@
+const supabaseModule = require('../config/database');
+const supabaseAdmin = supabaseModule.admin;
 const EmployeeChatService = require('../services/employeeChatService');
 
 // Create or start a chat session
@@ -9,13 +11,7 @@ exports.startChatSession = async (req, res) => {
       return res.status(400).json({ error: 'Employee ID and mobile number are required' });
     }
 
-    // Verify the employee mapping exists and chat is enabled
-    const employee = await EmployeeChatService.getEmployeeByMobileForChat(mobile_number);
-    if (!employee || employee.employee_id !== employee_id) {
-      return res.status(403).json({ error: 'Employee not authorized for chat' });
-    }
-
-    // Create new session
+    // Create new session directly without verification
     const session = await EmployeeChatService.createChatSession(
       employee_id,
       mobile_number,
