@@ -1,5 +1,6 @@
 const supabaseModule = require('../config/database');
 const supabaseAdmin = supabaseModule.admin;
+const { formatEmployeesWithRegistration, formatEmployeeWithRegistration } = require('../utils/registrationUtils');
 
 // Get all employees/candidates with filters
 exports.getAllEmployees = async (req, res) => {
@@ -17,7 +18,7 @@ exports.getAllEmployees = async (req, res) => {
     let query = supabaseAdmin
       .from('candidates')
       .select(
-        `id, first_name, last_name, email, phone_number, 
+        `id, first_name, last_name, email, phone_number, registration_number,
          gender, date_of_birth, city, province, postal_code,
          job_category_id, job_industry_id, campaign_id,
          verification_status, available_from, permit_status,
@@ -63,8 +64,11 @@ exports.getAllEmployees = async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
 
+    // Ensure registration_number is present for all employees
+    const formattedData = formatEmployeesWithRegistration(data);
+
     res.json({
-      data,
+      data: formattedData,
       pagination: {
         limit: parseInt(limit),
         offset: parseInt(offset),
@@ -88,7 +92,7 @@ exports.getEmployeeById = async (req, res) => {
     const { data, error } = await supabaseAdmin
       .from('candidates')
       .select(
-        `id, first_name, last_name, email, phone_number,
+        `id, first_name, last_name, email, phone_number, registration_number,
          gender, date_of_birth, city, province, postal_code,
          job_category_id, job_industry_id, campaign_id,
          verification_status, available_from, permit_status,
@@ -110,7 +114,10 @@ exports.getEmployeeById = async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
 
-    res.json(data);
+    // Ensure registration_number is present
+    const formattedData = formatEmployeeWithRegistration(data);
+    
+    res.json(formattedData);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -421,7 +428,7 @@ exports.getEmployeesByCampaign = async (req, res) => {
     const { data, error } = await supabaseAdmin
       .from('candidates')
       .select(
-        `id, first_name, last_name, email, phone_number,
+        `id, first_name, last_name, email, phone_number, registration_number,
          verification_status, created_at,
          job_categories:job_category_id(name),
          job_industries:job_industry_id(name)`,
@@ -436,7 +443,10 @@ exports.getEmployeesByCampaign = async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
 
-    res.json({ data, total: data.length });
+    // Ensure registration_number is present for all employees
+    const formattedData = formatEmployeesWithRegistration(data);
+
+    res.json({ data: formattedData, total: formattedData.length });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
