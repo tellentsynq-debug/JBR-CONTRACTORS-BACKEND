@@ -44,9 +44,9 @@ class EmployeeChatService {
         sender_type: senderType
       };
 
-      // Add file metadata if provided (for file messages)
+      // Add file metadata if provided (for file messages) - store as JSON object, not string
       if (fileMetadata) {
-        messageData.file_metadata = JSON.stringify(fileMetadata);
+        messageData.file_metadata = fileMetadata; // Pass as object, Supabase will handle JSONB conversion
       }
 
       const { data, error } = await supabaseAdmin
