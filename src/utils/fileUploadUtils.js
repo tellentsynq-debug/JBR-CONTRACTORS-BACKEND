@@ -62,7 +62,7 @@ async function uploadFileToSupabase(file, sessionId) {
     
     // Upload to Supabase storage
     const { data, error } = await supabaseAdmin.storage
-      .from('jbr')
+      .from('chat-files')
       .upload(uniqueFileName, file.buffer, {
         contentType: file.mimetype,
         upsert: false
@@ -74,7 +74,7 @@ async function uploadFileToSupabase(file, sessionId) {
 
     // Get public URL
     const { data: urlData } = supabaseAdmin.storage
-      .from('jbr')
+      .from('chat-files')
       .getPublicUrl(uniqueFileName);
 
     return {
@@ -96,7 +96,7 @@ async function uploadFileToSupabase(file, sessionId) {
 async function deleteFileFromSupabase(storagePath) {
   try {
     const { error } = await supabaseAdmin.storage
-      .from('jbr')
+      .from('chat-files')
       .remove([storagePath]);
 
     if (error) {
@@ -116,7 +116,7 @@ async function deleteFileFromSupabase(storagePath) {
 async function getFileDownloadUrl(storagePath, expirationSeconds = 3600) {
   try {
     const { data, error } = await supabaseAdmin.storage
-      .from('jbr')
+      .from('chat-files')
       .createSignedUrl(storagePath, expirationSeconds);
 
     if (error) {
