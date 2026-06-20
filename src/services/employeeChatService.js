@@ -100,7 +100,7 @@ class EmployeeChatService {
       const { error } = await supabaseAdmin
         .from('chat_sessions')
         .update({
-          last_message_at: new Date(),
+          last_message_at: new Date().toISOString(),
           message_count: count
         })
         .eq('id', sessionId);
@@ -117,14 +117,16 @@ class EmployeeChatService {
    */
   static async markMessagesAsRead(sessionId, employeeId) {
     try {
-      const { error } = await supabaseAdmin
+      const { data, error, count } = await supabaseAdmin
         .from('chat_messages')
-        .update({ read_at: new Date() })
+        .update({ read_at: new Date().toISOString() })
         .eq('session_id', sessionId)
         .neq('employee_id', employeeId)
-        .is('read_at', null);
+        .is('read_at', null)
+        .select('id', { count: 'exact' });
 
       if (error) throw error;
+      return { messages_marked_read: count || 0 };
     } catch (error) {
       console.error('Error marking messages as read:', error);
       throw error;
@@ -168,7 +170,7 @@ class EmployeeChatService {
         .from('chat_sessions')
         .update({
           session_status: 'archived',
-          ended_at: new Date()
+          ended_at: new Date().toISOString()
         })
         .eq('id', sessionId)
         .select();
@@ -279,7 +281,7 @@ class EmployeeChatService {
         .from('chat_sessions')
         .update({
           session_status: 'archived',
-          ended_at: new Date()
+          ended_at: new Date().toISOString()
         })
         .eq('session_status', 'active')
         .lt('last_message_at', archiveDate.toISOString())

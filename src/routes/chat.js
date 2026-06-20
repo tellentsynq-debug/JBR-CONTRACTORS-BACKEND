@@ -31,6 +31,9 @@ router.get('/messages/:session_id', chatController.getSessionMessages);
 // Get unread count for specific session
 router.get('/messages/:session_id/unread', chatController.getUnreadCount);
 
+// Mark messages as read
+router.patch('/messages/:session_id/mark-read', chatController.markMessagesAsRead);
+
 // Get file download URL
 router.get('/messages/:message_id/download', chatController.getFileDownloadUrl);
 
