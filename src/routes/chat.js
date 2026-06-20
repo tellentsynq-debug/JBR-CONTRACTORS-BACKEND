@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const chatController = require('../controllers/chatController');
 const authMiddleware = require('../middleware/authMiddleware');
+const fileUploadUtils = require('../utils/fileUploadUtils');
 
 // All routes require authentication
 router.use(authMiddleware.verifyToken);
@@ -21,11 +22,20 @@ router.get('/unread/:employee_id/total', chatController.getTotalUnreadMessages);
 // Send a message in chat session
 router.post('/messages/send', chatController.sendMessage);
 
+// Upload file to chat session
+router.post('/messages/upload', fileUploadUtils.upload.single('file'), chatController.uploadFile);
+
 // Get messages from a session
 router.get('/messages/:session_id', chatController.getSessionMessages);
 
 // Get unread count for specific session
 router.get('/messages/:session_id/unread', chatController.getUnreadCount);
+
+// Get file download URL
+router.get('/messages/:message_id/download', chatController.getFileDownloadUrl);
+
+// Delete file from chat
+router.delete('/messages/:message_id/file', chatController.deleteFile);
 
 // Close chat session
 router.patch('/sessions/:session_id/close', chatController.closeSession);

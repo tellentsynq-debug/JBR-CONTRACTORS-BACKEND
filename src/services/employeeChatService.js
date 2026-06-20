@@ -33,18 +33,25 @@ class EmployeeChatService {
   /**
    * Send a message in chat session
    */
-  static async sendMessage(sessionId, employeeId, messageText, messageType = 'text', mediaUrl = null, senderType = 'employee') {
+  static async sendMessage(sessionId, employeeId, messageText, messageType = 'text', mediaUrl = null, senderType = 'employee', fileMetadata = null) {
     try {
+      const messageData = {
+        session_id: sessionId,
+        employee_id: employeeId,
+        message_text: messageText,
+        message_type: messageType,
+        media_url: mediaUrl,
+        sender_type: senderType
+      };
+
+      // Add file metadata if provided (for file messages)
+      if (fileMetadata) {
+        messageData.file_metadata = JSON.stringify(fileMetadata);
+      }
+
       const { data, error } = await supabaseAdmin
         .from('chat_messages')
-        .insert([{
-          session_id: sessionId,
-          employee_id: employeeId,
-          message_text: messageText,
-          message_type: messageType,
-          media_url: mediaUrl,
-          sender_type: senderType
-        }])
+        .insert([messageData])
         .select();
 
       if (error) throw error;
