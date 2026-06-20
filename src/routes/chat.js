@@ -4,7 +4,7 @@ const chatController = require('../controllers/chatController');
 const authMiddleware = require('../middleware/authMiddleware');
 const fileUploadUtils = require('../utils/fileUploadUtils');
 
-// All routes require authentication
+// All routes require authentications
 router.use(authMiddleware.verifyToken);
 
 // Start a new chat session
