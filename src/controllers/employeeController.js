@@ -203,9 +203,12 @@ exports.createEmployee = async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
 
+    // Ensure registration_number is present
+    const employee = formatEmployeeWithRegistration(data[0]);
+
     res.status(201).json({
       success: true,
-      ...data[0],
+      ...employee,
       message: 'Employee created successfully',
       email_verified: tokenType === 'email_verified'
     });
@@ -305,9 +308,12 @@ exports.updateEmployee = async (req, res) => {
       return res.status(404).json({ error: 'Employee not found or already deleted' });
     }
 
+    // Ensure registration_number is present
+    const employee = formatEmployeeWithRegistration(data[0]);
+
     res.json({
       success: true,
-      ...data[0],
+      ...employee,
       message: 'Employee updated successfully'
     });
   } catch (error) {
@@ -368,8 +374,12 @@ exports.verifyEmployee = async (req, res) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
 
+    // Ensure registration_number is present
+    const employee = formatEmployeeWithRegistration(data[0]);
+
     res.json({
-      id: data[0].id,
+      id: employee.id,
+      registration_number: employee.registration_number,
       verification_status: 'verified',
       message: 'Employee verified successfully'
     });
@@ -406,8 +416,12 @@ exports.rejectEmployee = async (req, res) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
 
+    // Ensure registration_number is present
+    const employee = formatEmployeeWithRegistration(data[0]);
+
     res.json({
-      id: data[0].id,
+      id: employee.id,
+      registration_number: employee.registration_number,
       verification_status: 'rejected',
       message: 'Employee rejected successfully'
     });
