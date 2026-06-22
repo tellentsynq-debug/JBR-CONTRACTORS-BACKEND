@@ -5,7 +5,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 const router = express.Router();
 
 // Routes with JWT authentication
-router.post('/', authMiddleware.verifyToken, campaignController.createCampaign);
+router.post('/', campaignController.createCampaign);
 router.get('/', authMiddleware.verifyToken, campaignController.getAllCampaigns);
 router.get('/:id', authMiddleware.verifyToken, campaignController.getCampaignById);
 router.get('/:id/link', authMiddleware.verifyToken, campaignController.getCampaignLink);
