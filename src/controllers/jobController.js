@@ -63,6 +63,9 @@ exports.createJob = async (req, res) => {
       is_active
     };
 
+    // Log the final insert object to help diagnose remote failures (best-effort readable)
+    console.log('Job insert payload:', util.inspect(insertObj, { depth: null }));
+
     const { data, error } = await supabaseAdmin
       .from('jobs')
       .insert([insertObj])
