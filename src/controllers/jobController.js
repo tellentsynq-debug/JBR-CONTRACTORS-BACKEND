@@ -1,5 +1,6 @@
 const supabase = require('../config/database');
 const supabaseAdmin = supabase.admin;
+const util = require('util');
 
 /**
  * Create a new job
@@ -69,8 +70,9 @@ exports.createJob = async (req, res) => {
 
     if (error) {
       console.error('Error creating job:', error);
-      // Provide best-effort error details (some Supabase errors are objects)
-      const details = (error && error.message) ? error.message : (typeof error === 'string' ? error : JSON.stringify(error));
+      // Some Supabase error objects have non-enumerable properties which JSON.stringify hides.
+      // Use util.inspect to get a readable representation (best-effort) to return to caller and logs.
+      const details = (error && error.message) ? error.message : util.inspect(error, { depth: null });
       return res.status(500).json({ error: 'Failed to create job', details });
     }
 
