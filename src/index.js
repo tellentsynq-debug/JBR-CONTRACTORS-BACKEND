@@ -33,6 +33,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const masterReportRoutes = require('./routes/masterReport');
 const chatRoutes = require('./routes/chat');
 const warehouseRoutes = require('./routes/warehouses');
+const jobRoutes = require('./routes/jobs');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -51,6 +52,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/master-report', masterReportRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/warehouses', warehouseRoutes);
+app.use('/api/jobs', jobRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
