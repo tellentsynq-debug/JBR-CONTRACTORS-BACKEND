@@ -34,6 +34,20 @@ exports.createJob = async (req, res) => {
       }
     }
 
+    // Validate start_at and end_at if provided
+    if (start_at) {
+      const t = Date.parse(start_at);
+      if (Number.isNaN(t)) {
+        return res.status(400).json({ error: 'Invalid start_at date' });
+      }
+    }
+    if (end_at) {
+      const t = Date.parse(end_at);
+      if (Number.isNaN(t)) {
+        return res.status(400).json({ error: 'Invalid end_at date' });
+      }
+    }
+
     const insertObj = {
       campaign_name: campaign_name.trim(),
       role_title: role_title.trim(),
@@ -52,7 +66,9 @@ exports.createJob = async (req, res) => {
 
     if (error) {
       console.error('Error creating job:', error);
-      return res.status(500).json({ error: 'Failed to create job', details: error.message });
+      // Provide best-effort error details (some Supabase errors are objects)
+      const details = (error && error.message) ? error.message : (typeof error === 'string' ? error : JSON.stringify(error));
+      return res.status(500).json({ error: 'Failed to create job', details });
     }
 
     res.status(201).json({ message: 'Job created successfully', data: data[0] });
@@ -101,5 +117,161 @@ exports.getAllJobs = async (req, res) => {
   } catch (err) {
     console.error('Error in getAllJobs:', err);
     res.status(500).json({ error: 'Failed to retrieve jobs', details: err.message });
+  }
+};
+
+/**
+ * Get job by ID
+ * GET /jobs/:id
+ */
+exports.getJobById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: 'Job ID is required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('jobs')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Job not found' });
+      }
+      console.error('Error fetching job:', error);
+      return res.status(500).json({ error: 'Failed to retrieve job', details: error.message });
+    }
+
+    res.status(200).json({ message: 'Job retrieved successfully', data });
+  } catch (err) {
+    console.error('Error in getJobById:', err);
+    res.status(500).json({ error: 'Failed to retrieve job', details: err.message });
+  }
+};
+
+/**
+ * Update job
+ * PATCH /jobs/:id
+ */
+exports.updateJob = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      campaign_name,
+      role_title,
+      company_or_warehouse,
+      hourly_rate,
+      start_at,
+      end_at,
+      full_address,
+      is_active
+    } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ error: 'Job ID is required' });
+    }
+
+    // Check if job exists
+    const { data: existingJob, error: checkError } = await supabaseAdmin
+      .from('jobs')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !existingJob) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    // At least one field must be provided
+    if (
+      campaign_name === undefined &&
+      role_title === undefined &&
+      company_or_warehouse === undefined &&
+      hourly_rate === undefined &&
+      start_at === undefined &&
+      end_at === undefined &&
+      full_address === undefined &&
+      is_active === undefined
+    ) {
+      return res.status(400).json({ error: 'At least one field must be provided to update' });
+    }
+
+    const updateObj = {};
+    if (campaign_name !== undefined) updateObj.campaign_name = campaign_name.trim();
+    if (role_title !== undefined) updateObj.role_title = role_title.trim();
+    if (company_or_warehouse !== undefined) updateObj.company_or_warehouse = company_or_warehouse ? String(company_or_warehouse).trim() : null;
+    if (hourly_rate !== undefined) {
+      const num = Number(hourly_rate);
+      if (!Number.isNaN(num) && num >= 0) {
+        updateObj.hourly_rate = num;
+      } else {
+        return res.status(400).json({ error: 'Invalid hourly rate' });
+      }
+    }
+    if (start_at !== undefined) updateObj.start_at = start_at ? new Date(start_at).toISOString() : null;
+    if (end_at !== undefined) updateObj.end_at = end_at ? new Date(end_at).toISOString() : null;
+    if (full_address !== undefined) updateObj.full_address = full_address ? String(full_address).trim() : null;
+    if (is_active !== undefined) updateObj.is_active = is_active;
+
+    updateObj.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabaseAdmin
+      .from('jobs')
+      .update(updateObj)
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error('Error updating job:', error);
+      return res.status(500).json({ error: 'Failed to update job', details: error.message });
+    }
+
+    res.status(200).json({ message: 'Job updated successfully', data: data[0] });
+  } catch (err) {
+    console.error('Error in updateJob:', err);
+    res.status(500).json({ error: 'Failed to update job', details: err.message });
+  }
+};
+
+/**
+ * Delete job
+ * DELETE /jobs/:id
+ */
+exports.deleteJob = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: 'Job ID is required' });
+    }
+
+    const { data: existingJob, error: checkError } = await supabaseAdmin
+      .from('jobs')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !existingJob) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('jobs')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting job:', error);
+      return res.status(500).json({ error: 'Failed to delete job', details: error.message });
+    }
+
+    res.status(200).json({ message: 'Job deleted successfully', data: { id } });
+  } catch (err) {
+    console.error('Error in deleteJob:', err);
+    res.status(500).json({ error: 'Failed to delete job', details: err.message });
   }
 };
