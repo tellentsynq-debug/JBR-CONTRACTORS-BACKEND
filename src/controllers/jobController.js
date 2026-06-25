@@ -7,16 +7,19 @@ const supabaseAdmin = supabase.admin;
  */
 exports.createJob = async (req, res) => {
   try {
-    const {
-      campaign_name,
-      role_title,
-      company_or_warehouse,
-      hourly_rate,
-      start_at,
-      end_at,
-      full_address,
-      is_active = true
-    } = req.body;
+    // Accept a few common alias field names from clients (snake_case / camelCase / alternate names)
+    const body = req.body || {};
+    const campaign_name = body.campaign_name || body.campaignName || body.campaign || '';
+    const role_title = body.role_title || body.roleTitle || body.role || '';
+    const company_or_warehouse = (
+      body.company_or_warehouse || body.company_or_warehouse === '' ? body.company_or_warehouse :
+      body.company_warehouse || body.companyWarehouse || body.company || null
+    );
+    const hourly_rate = body.hourly_rate !== undefined ? body.hourly_rate : body.hourlyRate;
+    const start_at = body.start_at || body.startAt || body.start_date_time || body.start_date || body.startDateTime || body.start_date_time;
+    const end_at = body.end_at || body.endAt || body.end_date_time || body.end_date || body.endDateTime || body.end_date_time;
+    const full_address = body.full_address || body.fullAddress || body.address || null;
+    const is_active = body.is_active !== undefined ? body.is_active : (body.isActive !== undefined ? body.isActive : true);
 
     if (!campaign_name || campaign_name.trim() === '') {
       return res.status(400).json({ error: 'Campaign / Job name is required' });
