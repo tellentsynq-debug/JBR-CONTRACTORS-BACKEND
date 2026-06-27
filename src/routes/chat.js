@@ -3,6 +3,7 @@ const router = express.Router();
 const chatController = require('../controllers/chatController');
 const authMiddleware = require('../middleware/authMiddleware');
 const fileUploadUtils = require('../utils/fileUploadUtils');
+const documentController = require('../controllers/documentController');
 
 // All routes require authentications
 router.use(authMiddleware.verifyToken);
@@ -24,6 +25,10 @@ router.post('/messages/send', chatController.sendMessage);
 
 // Upload file to chat session
 router.post('/messages/upload', fileUploadUtils.upload.single('file'), chatController.uploadFile);
+
+// Document upload endpoints
+router.post('/documents/bank-account', documentController.uploadBankAccount);
+router.post('/documents/sin', documentController.uploadSin);
 
 // Get messages from a session
 router.get('/messages/:session_id', chatController.getSessionMessages);

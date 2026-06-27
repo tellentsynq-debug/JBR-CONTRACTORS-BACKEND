@@ -283,3 +283,19 @@ exports.deleteJob = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete job', details: err.message });
   }
 };
+
+/**
+ * Debug info for jobs endpoint (DO NOT expose secrets) - returns presence of Supabase config
+ * GET /jobs/debug
+ */
+exports.debug = async (req, res) => {
+  try {
+    const url = process.env.VITE_SUPABASE_URL || null;
+    const hasServiceKey = !!process.env.SUPABASE_SERVICE_KEY;
+    const usingKey = hasServiceKey ? 'service' : (process.env.VITE_SUPABASE_PUBLISHABLE_KEY ? 'publishable' : 'none');
+    res.status(200).json({ ok: true, supabaseUrl: url, usingKey, hasServiceKey });
+  } catch (err) {
+    console.error('Error in jobs debug:', err);
+    res.status(500).json({ ok: false, error: 'Failed to run debug', details: err.message });
+  }
+};

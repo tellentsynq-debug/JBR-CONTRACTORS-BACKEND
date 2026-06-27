@@ -5,6 +5,9 @@ const jobController = require('../controllers/jobController');
 // Create job
 router.post('/', jobController.createJob);
 
+// Debug route to check server-side Supabase config (safe)
+router.get('/debug', jobController.debug);
+
 // List jobs
 router.get('/', jobController.getAllJobs);
 
