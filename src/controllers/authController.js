@@ -425,6 +425,33 @@ exports.getCurrentUser = async (req, res) => {
     }
 
     // Step 3: Return user data
+    // Fetch latest bank_account and sin documents for this user (if any)
+    let bankDoc = null;
+    let sinDoc = null;
+    try {
+      const { data: bankData, error: bankErr } = await supabaseAdmin
+        .from('user_documents')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('doc_type', 'bank_account')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!bankErr && Array.isArray(bankData) && bankData.length > 0) bankDoc = bankData[0];
+
+      const { data: sinData, error: sinErr } = await supabaseAdmin
+        .from('user_documents')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('doc_type', 'sin')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!sinErr && Array.isArray(sinData) && sinData.length > 0) sinDoc = sinData[0];
+    } catch (err) {
+      console.warn('Could not fetch user documents for /me:', err && err.message ? err.message : err);
+    }
+
     res.status(200).json({
       success: true,
       user: {
@@ -436,7 +463,19 @@ exports.getCurrentUser = async (req, res) => {
         phone_number: profile.phone_number,
         is_active: profile.is_active,
         created_at: profile.created_at,
-        updated_at: profile.updated_at
+        updated_at: profile.updated_at,
+        bank_account: bankDoc && {
+          account_number: bankDoc.account_number || null,
+          document_url: bankDoc.document_url || null,
+          storage_path: bankDoc.storage_path || null,
+          created_at: bankDoc.created_at || null
+        },
+        sin: sinDoc && {
+          sin_number: sinDoc.sin_number || null,
+          document_url: sinDoc.document_url || null,
+          storage_path: sinDoc.storage_path || null,
+          created_at: sinDoc.created_at || null
+        }
       }
     });
   } catch (error) {
