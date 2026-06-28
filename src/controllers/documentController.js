@@ -3,10 +3,46 @@ const supabaseAdmin = supabaseModule.admin;
 const { v4: uuidv4 } = require('uuid');
 const util = require('util');
 
+async function ensureStorageBucket(bucketName) {
+  const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
+  if (listError) {
+    throw listError;
+  }
+
+  const bucketExists = buckets?.some((bucket) => bucket.name === bucketName);
+  if (!bucketExists) {
+    const { error: createError } = await supabaseAdmin.storage.createBucket(bucketName, {
+      public: true,
+      fileSizeLimit: 50 * 1024 * 1024
+    });
+
+    if (createError) {
+      throw createError;
+    }
+  }
+
+  return bucketName;
+}
+
+async function resolveStorageBucket(preferredBucket) {
+  const candidates = [preferredBucket, 'user-documents', 'documents', 'bank-documents', 'chat-files'].filter(Boolean);
+  const uniqueCandidates = [...new Set(candidates)];
+
+  for (const bucketName of uniqueCandidates) {
+    try {
+      return await ensureStorageBucket(bucketName);
+    } catch (err) {
+      console.warn(`Storage bucket not available: ${bucketName}`, err.message || err);
+    }
+  }
+
+  throw new Error('Unable to access or create a Supabase storage bucket for document uploads');
+}
+
 /**
  * Helper: upload base64 data URI or raw base64 to Supabase storage
  */
-async function uploadBase64ToStorage(base64Str, userId) {
+async function uploadBase64ToStorage(base64Str, userId, preferredBucket = process.env.SUPABASE_DOCUMENT_BUCKET || 'user-documents') {
   // strip data:*/*;base64, prefix if present
   const matches = base64Str.match(/^data:(.+);base64,(.+)$/);
   let contentType = 'application/octet-stream';
@@ -19,9 +55,10 @@ async function uploadBase64ToStorage(base64Str, userId) {
   const buffer = Buffer.from(b64, 'base64');
   const ext = contentType.split('/')[1] || 'bin';
   const fileName = `${userId || 'anonymous'}/${uuidv4()}.${ext}`;
+  const bucketName = await resolveStorageBucket(preferredBucket);
 
   const { data, error } = await supabaseAdmin.storage
-    .from('user-documents')
+    .from(bucketName)
     .upload(fileName, buffer, { contentType, upsert: false });
 
   if (error) {
@@ -29,12 +66,12 @@ async function uploadBase64ToStorage(base64Str, userId) {
   }
 
   const { data: urlData, error: urlErr } = supabaseAdmin.storage
-    .from('user-documents')
+    .from(bucketName)
     .getPublicUrl(fileName);
 
   if (urlErr) throw urlErr;
 
-  return { storagePath: fileName, publicUrl: urlData.publicUrl };
+  return { storagePath: fileName, publicUrl: urlData.publicUrl, bucketName };
 }
 
 /**
