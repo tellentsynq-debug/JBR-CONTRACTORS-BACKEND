@@ -117,6 +117,36 @@ async function getLatestUserDocument(userId, docType) {
   return Array.isArray(data) && data.length > 0 ? data[0] : null;
 }
 
+async function verifyDocumentValue(userId, docType, fieldName, inputValue) {
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+
+  const normalizedInput = String(inputValue || '').trim();
+  if (!normalizedInput) {
+    return {
+      verified: false,
+      message: 'Input value is required'
+    };
+  }
+
+  const document = await getLatestUserDocument(userId, docType);
+  if (!document) {
+    return {
+      verified: false,
+      message: 'No saved document found for this user'
+    };
+  }
+
+  const storedValue = String(document[fieldName] || '').trim();
+  return {
+    verified: normalizedInput === storedValue,
+    message: normalizedInput === storedValue ? 'Document verified' : 'Document value does not match saved record',
+    storedValue,
+    providedValue: normalizedInput
+  };
+}
+
 /**
  * GET /documents/bank-account
  */
@@ -126,6 +156,12 @@ exports.getBankAccountDocument = async (req, res) => {
 
     if (!userId) {
       return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const accountNumber = req.query?.accountNumber || req.body?.accountNumber || null;
+    if (accountNumber !== null && accountNumber !== undefined) {
+      const verification = await verifyDocumentValue(userId, 'bank_account', 'account_number', accountNumber);
+      return res.status(200).json({ success: true, verified: verification.verified, message: verification.message, data: verification });
     }
 
     const document = await getLatestUserDocument(userId, 'bank_account');
@@ -148,10 +184,16 @@ exports.uploadBankAccount = async (req, res) => {
   try {
     const userId = req.userId || null;
     // support form-data file upload via multer (req.file) or JSON body supportingDocument
-    const { accountNumber, supportingDocument } = req.body || {};
+    const { accountNumber, supportingDocument, verify, verifyOnly, action } = req.body || {};
 
     if (!accountNumber || String(accountNumber).trim() === '') {
       return res.status(400).json({ error: 'accountNumber is required' });
+    }
+
+    const shouldVerify = verify === true || verifyOnly === true || action === 'verify';
+    if (shouldVerify) {
+      const verification = await verifyDocumentValue(userId, 'bank_account', 'account_number', accountNumber);
+      return res.status(200).json({ success: true, verified: verification.verified, message: verification.message, data: verification });
     }
 
     let documentUrl = null;
@@ -213,6 +255,12 @@ exports.getSinDocument = async (req, res) => {
       return res.status(401).json({ success: false, error: 'Authentication required' });
     }
 
+    const sinNumber = req.query?.sinNumber || req.body?.sinNumber || null;
+    if (sinNumber !== null && sinNumber !== undefined) {
+      const verification = await verifyDocumentValue(userId, 'sin', 'sin_number', sinNumber);
+      return res.status(200).json({ success: true, verified: verification.verified, message: verification.message, data: verification });
+    }
+
     const document = await getLatestUserDocument(userId, 'sin');
 
     if (!document) {
@@ -232,10 +280,16 @@ exports.getSinDocument = async (req, res) => {
 exports.uploadSin = async (req, res) => {
   try {
     const userId = req.userId || null;
-    const { sinNumber, supportingDocument } = req.body || {};
+    const { sinNumber, supportingDocument, verify, verifyOnly, action } = req.body || {};
 
     if (!sinNumber || String(sinNumber).trim() === '') {
       return res.status(400).json({ error: 'sinNumber is required' });
+    }
+
+    const shouldVerify = verify === true || verifyOnly === true || action === 'verify';
+    if (shouldVerify) {
+      const verification = await verifyDocumentValue(userId, 'sin', 'sin_number', sinNumber);
+      return res.status(200).json({ success: true, verified: verification.verified, message: verification.message, data: verification });
     }
 
     let documentUrl = null;
