@@ -118,10 +118,28 @@ async function getLatestUserDocument(userId, docType) {
 }
 
 async function resolveDocumentUserId(req) {
-  if (req?.userId) return req.userId;
+  const directUserId = req?.userId || null;
 
-  const email = req?.userEmail || req?.body?.email || req?.query?.email;
-  if (!email) return null;
+  if (directUserId) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('candidates')
+        .select('id')
+        .eq('id', directUserId)
+        .limit(1);
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data[0].id || null;
+      }
+    } catch (err) {
+      console.warn('Could not resolve candidate id from direct user id:', err && err.message ? err.message : err);
+    }
+  }
+
+  const email = req?.userEmail || req?.body?.email || req?.query?.email || req?.user?.email;
+  if (!email) {
+    return directUserId || null;
+  }
 
   try {
     const { data, error } = await supabaseAdmin
@@ -132,17 +150,28 @@ async function resolveDocumentUserId(req) {
 
     if (error) {
       console.warn('Could not resolve candidate id from email:', error.message || error);
-      return null;
-    }
-
-    if (Array.isArray(data) && data.length > 0) {
+    } else if (Array.isArray(data) && data.length > 0) {
       return data[0].id || null;
     }
   } catch (err) {
-    console.warn('Could not resolve document user id:', err && err.message ? err.message : err);
+    console.warn('Could not resolve candidate id from email:', err && err.message ? err.message : err);
   }
 
-  return null;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .limit(1);
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data[0].id || null;
+    }
+  } catch (err) {
+    console.warn('Could not resolve profile id from email:', err && err.message ? err.message : err);
+  }
+
+  return directUserId || null;
 }
 
 async function verifyDocumentValue(userId, docType, fieldName, inputValue) {

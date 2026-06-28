@@ -45,29 +45,80 @@ function formatEmployeesWithRegistration(employees) {
   return employees.map(emp => formatEmployeeWithRegistration(emp));
 }
 
+async function resolveEmployeeDocumentUserIds(employee) {
+  if (!employee) return [];
+
+  const candidateIds = [];
+  if (employee.id) candidateIds.push(employee.id);
+
+  if (employee.email) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('candidates')
+        .select('id')
+        .eq('email', employee.email)
+        .limit(1);
+
+      if (!error && Array.isArray(data) && data.length > 0 && data[0].id) {
+        candidateIds.push(data[0].id);
+      }
+    } catch (err) {
+      console.warn('Could not resolve candidate document id from email:', err && err.message ? err.message : err);
+    }
+
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('email', employee.email)
+        .limit(1);
+
+      if (!error && Array.isArray(data) && data.length > 0 && data[0].id) {
+        candidateIds.push(data[0].id);
+      }
+    } catch (err) {
+      console.warn('Could not resolve profile document id from email:', err && err.message ? err.message : err);
+    }
+  }
+
+  return [...new Set(candidateIds.filter(Boolean))];
+}
+
 async function enrichEmployeeWithDocuments(employee) {
   if (!employee || !employee.id) return employee;
 
   try {
+    const candidateUserIds = await resolveEmployeeDocumentUserIds(employee);
+    const documentUserIds = candidateUserIds.length > 0 ? candidateUserIds : [employee.id];
+
     const [bankRes, sinRes] = await Promise.all([
-      supabaseAdmin
-        .from('user_documents')
-        .select('*')
-        .eq('user_id', employee.id)
-        .eq('doc_type', 'bank_account')
-        .order('created_at', { ascending: false })
-        .limit(1),
-      supabaseAdmin
-        .from('user_documents')
-        .select('*')
-        .eq('user_id', employee.id)
-        .eq('doc_type', 'sin')
-        .order('created_at', { ascending: false })
-        .limit(1)
+      Promise.all(documentUserIds.map(userId =>
+        supabaseAdmin
+          .from('user_documents')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('doc_type', 'bank_account')
+          .order('created_at', { ascending: false })
+          .limit(1)
+      )),
+      Promise.all(documentUserIds.map(userId =>
+        supabaseAdmin
+          .from('user_documents')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('doc_type', 'sin')
+          .order('created_at', { ascending: false })
+          .limit(1)
+      ))
     ]);
 
-    const bankDoc = !bankRes.error && Array.isArray(bankRes.data) && bankRes.data.length > 0 ? bankRes.data[0] : null;
-    const sinDoc = !sinRes.error && Array.isArray(sinRes.data) && sinRes.data.length > 0 ? sinRes.data[0] : null;
+    const bankDoc = bankRes
+      .flatMap(res => (!res.error && Array.isArray(res.data) && res.data.length > 0 ? res.data : []))
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
+
+    const sinDoc = sinRes
+      .flatMap(res => (!res.error && Array.isArray(res.data) && res.data.length > 0 ? res.data : []))
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
 
     return {
       ...employee,
