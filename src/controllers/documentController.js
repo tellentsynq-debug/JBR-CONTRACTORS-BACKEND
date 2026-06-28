@@ -29,9 +29,30 @@ async function uploadBase64ToStorage(base64Str, userId, preferredBucket = proces
   const ext = contentType.split('/')[1] || 'bin';
   const fileName = `${userId || 'anonymous'}/${uuidv4()}.${ext}`;
 
-  const candidates = [preferredBucket, process.env.SUPABASE_DOCUMENT_BUCKET, 'user-documents', 'documents', 'bank-documents', 'chat-files']
+  // Build candidate bucket list and prefer any existing buckets that look like document buckets
+  const staticCandidates = [preferredBucket, process.env.SUPABASE_DOCUMENT_BUCKET, 'user-documents', 'documents', 'bank-documents', 'chat-files']
     .filter(Boolean);
-  const uniqueCandidates = [...new Set(candidates)];
+
+  let discovered = [];
+  try {
+    const { data: bucketList, error: listErr } = await supabaseAdmin.storage.listBuckets();
+    if (!listErr && Array.isArray(bucketList?.data || bucketList)) {
+      const bucketsArray = Array.isArray(bucketList.data) ? bucketList.data : bucketList;
+      const lower = (s) => (s || '').toLowerCase();
+      // find buckets with names containing document-like keywords
+      discovered = bucketsArray
+        .map((b) => b.name)
+        .filter((name) => {
+          const n = lower(name);
+          return ['doc', 'document', 'upload', 'bank', 'user', 'chat', 'file', 'resume'].some((k) => n.includes(k));
+        });
+    }
+  } catch (e) {
+    console.warn('Failed to list buckets for discovery:', e && e.message ? e.message : e);
+  }
+
+  const candidates = [...new Set([].concat(discovered, staticCandidates))];
+  const uniqueCandidates = candidates.filter(Boolean);
 
   let lastErr = null;
   for (const bucketName of uniqueCandidates) {
