@@ -375,6 +375,20 @@ exports.getCurrentUser = async (req, res) => {
         }
       }
 
+      const bankAccountData = bankDoc ? {
+        account_number: bankDoc.account_number || null,
+        document_url: bankDoc.document_url || null,
+        storage_path: bankDoc.storage_path || null,
+        created_at: bankDoc.created_at || null
+      } : null;
+
+      const sinData = sinDoc ? {
+        sin_number: sinDoc.sin_number || null,
+        document_url: sinDoc.document_url || null,
+        storage_path: sinDoc.storage_path || null,
+        created_at: sinDoc.created_at || null
+      } : null;
+
       res.status(200).json({
         success: true,
         user: {
@@ -408,18 +422,8 @@ exports.getCurrentUser = async (req, res) => {
               job_industry_id: registrationData.job_industry_id,
               created_at: registrationData.created_at,
               updated_at: registrationData.updated_at,
-              bank_account: bankDoc && {
-                account_number: bankDoc.account_number || null,
-                document_url: bankDoc.document_url || null,
-                storage_path: bankDoc.storage_path || null,
-                created_at: bankDoc.created_at || null
-              },
-              sin: sinDoc && {
-                sin_number: sinDoc.sin_number || null,
-                document_url: sinDoc.document_url || null,
-                storage_path: sinDoc.storage_path || null,
-                created_at: sinDoc.created_at || null
-              }
+              bank_account: bankAccountData,
+              sin: sinData
             }
           })
         }
@@ -490,6 +494,20 @@ exports.getCurrentUser = async (req, res) => {
       console.warn('Could not fetch user documents for /me:', err && err.message ? err.message : err);
     }
 
+    const bankAccountData = bankDoc ? {
+      account_number: bankDoc.account_number || null,
+      document_url: bankDoc.document_url || null,
+      storage_path: bankDoc.storage_path || null,
+      created_at: bankDoc.created_at || null
+    } : null;
+
+    const sinData = sinDoc ? {
+      sin_number: sinDoc.sin_number || null,
+      document_url: sinDoc.document_url || null,
+      storage_path: sinDoc.storage_path || null,
+      created_at: sinDoc.created_at || null
+    } : null;
+
     res.status(200).json({
       success: true,
       user: {
@@ -502,18 +520,8 @@ exports.getCurrentUser = async (req, res) => {
         is_active: profile.is_active,
         created_at: profile.created_at,
         updated_at: profile.updated_at,
-        bank_account: bankDoc && {
-          account_number: bankDoc.account_number || null,
-          document_url: bankDoc.document_url || null,
-          storage_path: bankDoc.storage_path || null,
-          created_at: bankDoc.created_at || null
-        },
-        sin: sinDoc && {
-          sin_number: sinDoc.sin_number || null,
-          document_url: sinDoc.document_url || null,
-          storage_path: sinDoc.storage_path || null,
-          created_at: sinDoc.created_at || null
-        }
+        bank_account: bankAccountData,
+        sin: sinData
       }
     });
   } catch (error) {
