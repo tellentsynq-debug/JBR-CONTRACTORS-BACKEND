@@ -111,8 +111,16 @@ exports.uploadBankAccount = async (req, res) => {
 
     const { data, error } = await supabaseAdmin.from('user_documents').insert([insertObj]).select();
     if (error) {
-      console.error('Error inserting bank account document:', util.inspect(error, { depth: null }));
-      return res.status(500).json({ error: 'Failed to save bank account', details: util.inspect(error, { depth: null }) });
+      const errInfo = {
+        message: error.message || null,
+        status: error.status || null,
+        code: error.code || null,
+        details: error.details || null,
+        hint: error.hint || null,
+        full: util.inspect(error, { depth: null })
+      };
+      console.error('Error inserting bank account document:', errInfo);
+      return res.status(500).json({ error: 'Failed to save bank account', details: errInfo });
     }
 
     res.status(201).json({ message: 'Bank account uploaded', data: data[0] });
@@ -157,8 +165,16 @@ exports.uploadSin = async (req, res) => {
 
     const { data, error } = await supabaseAdmin.from('user_documents').insert([insertObj]).select();
     if (error) {
-      console.error('Error inserting sin document:', util.inspect(error, { depth: null }));
-      return res.status(500).json({ error: 'Failed to save sin', details: util.inspect(error, { depth: null }) });
+      const errInfo = {
+        message: error.message || null,
+        status: error.status || null,
+        code: error.code || null,
+        details: error.details || null,
+        hint: error.hint || null,
+        full: util.inspect(error, { depth: null })
+      };
+      console.error('Error inserting sin document:', errInfo);
+      return res.status(500).json({ error: 'Failed to save sin', details: errInfo });
     }
 
     res.status(201).json({ message: 'SIN uploaded', data: data[0] });
