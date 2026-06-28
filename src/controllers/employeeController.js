@@ -6,6 +6,9 @@ const { formatEmployeesWithRegistration, formatEmployeeWithRegistration } = requ
 exports.getAllEmployees = async (req, res) => {
   try {
     const { 
+      id,
+      employee_id,
+      employeeId,
       campaign_id, 
       job_category_id, 
       job_industry_id, 
@@ -14,6 +17,10 @@ exports.getAllEmployees = async (req, res) => {
       limit = 10,
       offset = 0 
     } = req.query;
+
+    const parsedLimit = parseInt(limit, 10) || 10;
+    const parsedOffset = parseInt(offset, 10) || 0;
+    const requestedId = id || employee_id || employeeId;
 
     let query = supabaseAdmin
       .from('candidates')
@@ -32,6 +39,9 @@ exports.getAllEmployees = async (req, res) => {
       .is('deleted_at', null); // Exclude soft-deleted records
 
     // Apply filters
+    if (requestedId) {
+      query = query.eq('id', requestedId);
+    }
     if (campaign_id) {
       query = query.eq('campaign_id', campaign_id);
     }
@@ -55,7 +65,7 @@ exports.getAllEmployees = async (req, res) => {
     // Pagination and sorting
     query = query
       .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+      .range(parsedOffset, parsedOffset + parsedLimit - 1);
 
     const { data, error, count } = await query;
 
@@ -70,8 +80,8 @@ exports.getAllEmployees = async (req, res) => {
     res.json({
       data: formattedData,
       pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
+        limit: parsedLimit,
+        offset: parsedOffset,
         total: count
       }
     });
