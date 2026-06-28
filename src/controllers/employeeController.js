@@ -1,6 +1,6 @@
 const supabaseModule = require('../config/database');
 const supabaseAdmin = supabaseModule.admin;
-const { formatEmployeesWithRegistration, formatEmployeeWithRegistration } = require('../utils/registrationUtils');
+const { formatEmployeesWithRegistrationAndDocuments, formatEmployeeWithRegistrationAndDocuments } = require('../utils/registrationUtils');
 
 // Get all employees/candidates with filters
 exports.getAllEmployees = async (req, res) => {
@@ -74,8 +74,8 @@ exports.getAllEmployees = async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
 
-    // Ensure registration_number is present for all employees
-    const formattedData = formatEmployeesWithRegistration(data);
+    // Ensure registration_number is present for all employees and attach documents
+    const formattedData = await formatEmployeesWithRegistrationAndDocuments(data);
 
     res.json({
       data: formattedData,
@@ -124,8 +124,8 @@ exports.getEmployeeById = async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
 
-    // Ensure registration_number is present
-    const formattedData = formatEmployeeWithRegistration(data);
+    // Ensure registration_number is present and attach documents
+    const formattedData = await formatEmployeeWithRegistrationAndDocuments(data);
     
     res.json(formattedData);
   } catch (error) {
