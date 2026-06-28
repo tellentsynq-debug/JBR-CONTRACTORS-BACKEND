@@ -348,6 +348,33 @@ exports.getCurrentUser = async (req, res) => {
         console.log('No candidate data found for email:', userEmail);
       }
 
+      // Try to fetch bank_account and sin documents for this candidate (if any)
+      let bankDoc = null;
+      let sinDoc = null;
+      if (registrationData) {
+        try {
+          const { data: bankData, error: bankErr } = await supabaseAdmin
+            .from('user_documents')
+            .select('*')
+            .eq('user_id', registrationData.id)
+            .eq('doc_type', 'bank_account')
+            .order('created_at', { ascending: false })
+            .limit(1);
+          if (!bankErr && Array.isArray(bankData) && bankData.length > 0) bankDoc = bankData[0];
+
+          const { data: sinData, error: sinErr } = await supabaseAdmin
+            .from('user_documents')
+            .select('*')
+            .eq('user_id', registrationData.id)
+            .eq('doc_type', 'sin')
+            .order('created_at', { ascending: false })
+            .limit(1);
+          if (!sinErr && Array.isArray(sinData) && sinData.length > 0) sinDoc = sinData[0];
+        } catch (err) {
+          console.warn('Could not fetch documents for OTP profile:', err && err.message ? err.message : err);
+        }
+      }
+
       res.status(200).json({
         success: true,
         user: {
@@ -356,7 +383,6 @@ exports.getCurrentUser = async (req, res) => {
           verificationId: verificationId,
           status: 'email_verified',
           message: 'User authenticated via OTP verification - email confirmed',
-          // Include full candidate data if registration exists
           ...(registrationData && {
             profile: {
               id: registrationData.id,
@@ -381,7 +407,19 @@ exports.getCurrentUser = async (req, res) => {
               job_category_id: registrationData.job_category_id,
               job_industry_id: registrationData.job_industry_id,
               created_at: registrationData.created_at,
-              updated_at: registrationData.updated_at
+              updated_at: registrationData.updated_at,
+              bank_account: bankDoc && {
+                account_number: bankDoc.account_number || null,
+                document_url: bankDoc.document_url || null,
+                storage_path: bankDoc.storage_path || null,
+                created_at: bankDoc.created_at || null
+              },
+              sin: sinDoc && {
+                sin_number: sinDoc.sin_number || null,
+                document_url: sinDoc.document_url || null,
+                storage_path: sinDoc.storage_path || null,
+                created_at: sinDoc.created_at || null
+              }
             }
           })
         }
