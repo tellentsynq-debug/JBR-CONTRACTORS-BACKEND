@@ -2,6 +2,7 @@ const supabaseModule = require('../config/database');
 const supabaseAdmin = supabaseModule.admin;
 const { v4: uuidv4 } = require('uuid');
 const util = require('util');
+const fileUploadUtils = require('../utils/fileUploadUtils');
 
 // Try uploading to a list of candidate buckets. Some Supabase projects may name buckets differently
 // or disallow server-side bucket creation. We'll attempt each candidate and only fail if
@@ -102,6 +103,7 @@ async function uploadBase64ToStorage(base64Str, userId, preferredBucket = proces
 exports.uploadBankAccount = async (req, res) => {
   try {
     const userId = req.userId || null;
+    // support form-data file upload via multer (req.file) or JSON body supportingDocument
     const { accountNumber, supportingDocument } = req.body || {};
 
     if (!accountNumber || String(accountNumber).trim() === '') {
@@ -111,7 +113,12 @@ exports.uploadBankAccount = async (req, res) => {
     let documentUrl = null;
     let storagePath = null;
 
-    if (supportingDocument) {
+    if (req.file) {
+      // File was uploaded via multipart/form-data
+      const uploaded = await fileUploadUtils.uploadFileToSupabase(req.file, userId || 'anonymous');
+      documentUrl = uploaded.publicUrl;
+      storagePath = uploaded.storagePath;
+    } else if (supportingDocument) {
       if (String(supportingDocument).startsWith('http')) {
         documentUrl = supportingDocument;
       } else {
@@ -166,7 +173,11 @@ exports.uploadSin = async (req, res) => {
     let documentUrl = null;
     let storagePath = null;
 
-    if (supportingDocument) {
+    if (req.file) {
+      const uploaded = await fileUploadUtils.uploadFileToSupabase(req.file, userId || 'anonymous');
+      documentUrl = uploaded.publicUrl;
+      storagePath = uploaded.storagePath;
+    } else if (supportingDocument) {
       if (String(supportingDocument).startsWith('http')) {
         documentUrl = supportingDocument;
       } else {
