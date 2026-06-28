@@ -117,6 +117,34 @@ async function getLatestUserDocument(userId, docType) {
   return Array.isArray(data) && data.length > 0 ? data[0] : null;
 }
 
+async function resolveDocumentUserId(req) {
+  if (req?.userId) return req.userId;
+
+  const email = req?.userEmail || req?.body?.email || req?.query?.email;
+  if (!email) return null;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('candidates')
+      .select('id')
+      .eq('email', email)
+      .limit(1);
+
+    if (error) {
+      console.warn('Could not resolve candidate id from email:', error.message || error);
+      return null;
+    }
+
+    if (Array.isArray(data) && data.length > 0) {
+      return data[0].id || null;
+    }
+  } catch (err) {
+    console.warn('Could not resolve document user id:', err && err.message ? err.message : err);
+  }
+
+  return null;
+}
+
 async function verifyDocumentValue(userId, docType, fieldName, inputValue) {
   if (!userId) {
     throw new Error('User ID is required');
@@ -152,7 +180,7 @@ async function verifyDocumentValue(userId, docType, fieldName, inputValue) {
  */
 exports.getBankAccountDocument = async (req, res) => {
   try {
-    const userId = req.userId || null;
+    const userId = await resolveDocumentUserId(req);
 
     if (!userId) {
       return res.status(401).json({ success: false, error: 'Authentication required' });
@@ -182,7 +210,7 @@ exports.getBankAccountDocument = async (req, res) => {
  */
 exports.uploadBankAccount = async (req, res) => {
   try {
-    const userId = req.userId || null;
+    const userId = await resolveDocumentUserId(req);
     // support form-data file upload via multer (req.file) or JSON body supportingDocument
     const { accountNumber, supportingDocument, verify, verifyOnly, action } = req.body || {};
 
@@ -249,7 +277,7 @@ exports.uploadBankAccount = async (req, res) => {
  */
 exports.getSinDocument = async (req, res) => {
   try {
-    const userId = req.userId || null;
+    const userId = await resolveDocumentUserId(req);
 
     if (!userId) {
       return res.status(401).json({ success: false, error: 'Authentication required' });
@@ -279,7 +307,7 @@ exports.getSinDocument = async (req, res) => {
  */
 exports.uploadSin = async (req, res) => {
   try {
-    const userId = req.userId || null;
+    const userId = await resolveDocumentUserId(req);
     const { sinNumber, supportingDocument, verify, verifyOnly, action } = req.body || {};
 
     if (!sinNumber || String(sinNumber).trim() === '') {
