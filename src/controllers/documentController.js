@@ -3,40 +3,13 @@ const supabaseAdmin = supabaseModule.admin;
 const { v4: uuidv4 } = require('uuid');
 const util = require('util');
 
-async function ensureStorageBucket(bucketName) {
-  const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
-  if (listError) {
-    throw listError;
-  }
-
-  const bucketExists = buckets?.some((bucket) => bucket.name === bucketName);
-  if (!bucketExists) {
-    const { error: createError } = await supabaseAdmin.storage.createBucket(bucketName, {
-      public: true,
-      fileSizeLimit: 50 * 1024 * 1024
-    });
-
-    if (createError) {
-      throw createError;
-    }
-  }
-
-  return bucketName;
-}
-
-async function resolveStorageBucket(preferredBucket) {
-  const candidates = [preferredBucket, 'user-documents', 'documents', 'bank-documents', 'chat-files'].filter(Boolean);
-  const uniqueCandidates = [...new Set(candidates)];
-
-  for (const bucketName of uniqueCandidates) {
-    try {
-      return await ensureStorageBucket(bucketName);
-    } catch (err) {
-      console.warn(`Storage bucket not available: ${bucketName}`, err.message || err);
-    }
-  }
-
-  throw new Error('Unable to access or create a Supabase storage bucket for document uploads');
+// Try uploading to a list of candidate buckets. Some Supabase projects may name buckets differently
+// or disallow server-side bucket creation. We'll attempt each candidate and only fail if
+// none accept the upload.
+function isBucketNotFoundError(err) {
+  if (!err) return false;
+  const msg = String(err.message || err).toLowerCase();
+  return msg.includes('bucket') && (msg.includes('not found') || msg.includes('does not exist') || msg.includes('not found')) || (err.status === 404);
 }
 
 /**
@@ -55,23 +28,51 @@ async function uploadBase64ToStorage(base64Str, userId, preferredBucket = proces
   const buffer = Buffer.from(b64, 'base64');
   const ext = contentType.split('/')[1] || 'bin';
   const fileName = `${userId || 'anonymous'}/${uuidv4()}.${ext}`;
-  const bucketName = await resolveStorageBucket(preferredBucket);
 
-  const { data, error } = await supabaseAdmin.storage
-    .from(bucketName)
-    .upload(fileName, buffer, { contentType, upsert: false });
+  const candidates = [preferredBucket, process.env.SUPABASE_DOCUMENT_BUCKET, 'user-documents', 'documents', 'bank-documents', 'chat-files']
+    .filter(Boolean);
+  const uniqueCandidates = [...new Set(candidates)];
 
-  if (error) {
-    throw error;
+  let lastErr = null;
+  for (const bucketName of uniqueCandidates) {
+    try {
+      const { data, error } = await supabaseAdmin.storage
+        .from(bucketName)
+        .upload(fileName, buffer, { contentType, upsert: false });
+
+      if (error) {
+        if (isBucketNotFoundError(error)) {
+          lastErr = error;
+          console.warn(`Bucket not found, trying next candidate: ${bucketName}`);
+          continue; // try next bucket
+        }
+        throw error;
+      }
+
+      const { data: urlData, error: urlErr } = await supabaseAdmin.storage
+        .from(bucketName)
+        .getPublicUrl(fileName);
+
+      if (urlErr) {
+        // If public URL retrieval fails, still return storage path and bucket
+        console.warn('Failed to get public URL:', urlErr);
+        return { storagePath: fileName, publicUrl: null, bucketName };
+      }
+
+      return { storagePath: fileName, publicUrl: urlData.publicUrl, bucketName };
+    } catch (err) {
+      if (isBucketNotFoundError(err)) {
+        lastErr = err;
+        console.warn(`Bucket not found when uploading to ${bucketName}:`, err.message || err);
+        continue;
+      }
+      throw err;
+    }
   }
 
-  const { data: urlData, error: urlErr } = supabaseAdmin.storage
-    .from(bucketName)
-    .getPublicUrl(fileName);
-
-  if (urlErr) throw urlErr;
-
-  return { storagePath: fileName, publicUrl: urlData.publicUrl, bucketName };
+  // If we exhausted candidates, surface the last bucket-related error or a generic one
+  if (lastErr) throw lastErr;
+  throw new Error('Unable to upload document to any configured Supabase storage bucket');
 }
 
 /**
