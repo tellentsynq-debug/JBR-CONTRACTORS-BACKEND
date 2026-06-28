@@ -26,8 +26,10 @@ router.post('/messages/send', chatController.sendMessage);
 // Upload file to chat session
 router.post('/messages/upload', fileUploadUtils.upload.single('file'), chatController.uploadFile);
 
-// Document upload endpoints (support multipart/form-data file field 'supportingDocument')
+// Document upload and fetch endpoints (support multipart/form-data file field 'supportingDocument')
+router.get('/documents/bank-account', documentController.getBankAccountDocument);
 router.post('/documents/bank-account', fileUploadUtils.upload.single('supportingDocument'), documentController.uploadBankAccount);
+router.get('/documents/sin', documentController.getSinDocument);
 router.post('/documents/sin', fileUploadUtils.upload.single('supportingDocument'), documentController.uploadSin);
 
 // Get messages from a session

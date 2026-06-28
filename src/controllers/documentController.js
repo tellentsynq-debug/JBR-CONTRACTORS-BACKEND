@@ -97,6 +97,50 @@ async function uploadBase64ToStorage(base64Str, userId, preferredBucket = proces
   throw new Error('Unable to upload document to any configured Supabase storage bucket');
 }
 
+async function getLatestUserDocument(userId, docType) {
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('user_documents')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('doc_type', docType)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  return Array.isArray(data) && data.length > 0 ? data[0] : null;
+}
+
+/**
+ * GET /documents/bank-account
+ */
+exports.getBankAccountDocument = async (req, res) => {
+  try {
+    const userId = req.userId || null;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const document = await getLatestUserDocument(userId, 'bank_account');
+
+    if (!document) {
+      return res.status(404).json({ success: false, message: 'No bank account document found' });
+    }
+
+    res.status(200).json({ success: true, data: document });
+  } catch (err) {
+    console.error('Error in getBankAccountDocument:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch bank account document', details: err.message || String(err) });
+  }
+};
+
 /**
  * POST /documents/bank-account
  */
@@ -155,6 +199,30 @@ exports.uploadBankAccount = async (req, res) => {
   } catch (err) {
     console.error('Error in uploadBankAccount:', err);
     res.status(500).json({ error: 'Failed to upload bank account', details: err.message || String(err) });
+  }
+};
+
+/**
+ * GET /documents/sin
+ */
+exports.getSinDocument = async (req, res) => {
+  try {
+    const userId = req.userId || null;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const document = await getLatestUserDocument(userId, 'sin');
+
+    if (!document) {
+      return res.status(404).json({ success: false, message: 'No SIN document found' });
+    }
+
+    res.status(200).json({ success: true, data: document });
+  } catch (err) {
+    console.error('Error in getSinDocument:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch SIN document', details: err.message || String(err) });
   }
 };
 
