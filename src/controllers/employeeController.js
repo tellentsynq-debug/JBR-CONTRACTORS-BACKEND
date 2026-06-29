@@ -1,6 +1,10 @@
 const supabaseModule = require('../config/database');
 const supabaseAdmin = supabaseModule.admin;
-const { formatEmployeesWithRegistrationAndDocuments, formatEmployeeWithRegistrationAndDocuments } = require('../utils/registrationUtils');
+const {
+  formatEmployeeWithRegistration,
+  formatEmployeesWithRegistrationAndDocuments,
+  formatEmployeeWithRegistrationAndDocuments
+} = require('../utils/registrationUtils');
 
 // Get all employees/candidates with filters
 exports.getAllEmployees = async (req, res) => {
